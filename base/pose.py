@@ -44,17 +44,22 @@ class SO3:
     def log(self): return self._rot.as_rotvec()
     def inverse(self): return SO3(self._rot.inv())
 
-    
-
 @define
 class SE3:
-    rot: SO3 = field(factory=lambda: SO3())
-    trans: ArrayLike = field(factory=lambda: np.array([0,0,0]))
+    rot: SO3 = field(factory=lambda: SO3.identity())
+    trans: ArrayLike = field(factory=lambda: np.array([0,0,0]), converter=np.array)
     
     def __repr__(self) -> str:
         xyz: np.ndarray = np.round(self.trans, 5)
-        xyzw: np.ndarray = np.round(self.rot.xyzw, 5)
+        xyzw: np.ndarray = np.round(self.rot.as_quat(), 5)
         return f"{self.__class__.__name__}(xyzw={xyzw}, xyz={xyz})"
+    
+    def __matmul__(self, target):
+        if isinstance(target, SE3):
+            return self.multiply(target)
+        elif isinstance(target, np.ndarray):
+            return self.apply(target)
+        raise ValueError
     
     @classmethod
     def from_matrix(cls, mat: ArrayLike) -> SE3:

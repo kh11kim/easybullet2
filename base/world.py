@@ -54,9 +54,10 @@ class World(BulletClient):
         self.dt = dt
         self.vis_delay = vis_delay #visualization delay
         self.t = 0.
-        self.bodies:Dict[str, Body] = dict()
+        self.bodies:Dict[str, AbstractBody] = dict()
         self.shapes:Dict[str, Shape] = dict()
-
+        self.debug_items: Dict[str, int] = dict()
+        
         if gui == True:
             if self.gui_world_exists: return 
             else: self.gui_world_exists = True
@@ -68,6 +69,11 @@ class World(BulletClient):
         
         self.set_gravity()
 
+    def get_body(self, name):
+        if name in self.bodies:
+            return self.bodies[name]
+        return None
+            
     def set_gravity(self, force_z=-9.81):
         self.setGravity(0, 0, -9.81)
         
@@ -103,10 +109,25 @@ class World(BulletClient):
         self.shapes[shape] = (viz_id, col_id)
         return self.shapes[shape]
     
-    def register_body(self, body: Body):
-        self.bodies[body.name] = body
+    def register_geometry(
+        self, name:str, vis_id:int, col_id:int, 
+        mass:float, body_cls:Type[AbstractBody], shape:Shape):
+        if name in self.bodies:
+            if body_cls is not type(self.bodies[name]):
+                raise ValueError(f"Body name already exists with different type!")
+            ic("Body name already exists. Return the existing one")
+            return self.bodies[name]
+        
+        
+        uid = self.createMultiBody(
+            baseVisualShapeIndex=vis_id,
+            baseCollisionShapeIndex=col_id,
+            baseMass=mass)
+        return body_cls(
+            world=self, uid=uid, 
+            name=name, mass=mass, ghost=shape.ghost, shape=shape)
     
-    def remove_body(self, body: str | Body):
+    def remove_body(self, body: str | AbstractBody):
         if isinstance(body, str):
             body = self.bodies[body]
         self.removeBody(body.uid)
@@ -114,8 +135,8 @@ class World(BulletClient):
     
     def get_distance_info(
         self, 
-        body1:Body, 
-        body2:Body, 
+        body1:AbstractBody, 
+        body2:AbstractBody, 
         link1:int=None, 
         link2:int=None,
         tol:float=0.,
@@ -139,22 +160,12 @@ class World(BulletClient):
 
 
 @define
-class Body(abc.ABC):
+class AbstractBody(abc.ABC):
     world: World
     uid: int
-    body_type:str
     name: str
     mass: float
     ghost:bool
-    
-    def __attrs_post_init__(self):
-        if self.name in self.world.bodies:
-            if self.body_type == self.world.bodies[self.name].body_type:
-                ic("Body name already exists. Return the existing one")
-                return self.world.bodies[self.name]
-            ic("Body name already exists, but different type. Create a new one")
-        else:
-            self.world.register_body(self)
     
     def set_pose(self, pose: SE3):
         self.world.resetBasePositionAndOrientation(
@@ -162,9 +173,9 @@ class Body(abc.ABC):
     
     def get_pose(self):
         pos, orn = self.world.getBasePositionAndOrientation(self.uid)
-        return SE3(SO3(orn), pos)
+        return SE3(SO3.from_quat(orn), pos)
 
-    def is_collision_with(self, other_body:Body):
+    def is_collision_with(self, other_body:AbstractBody):
         distance_info = self.get_distance_info(self, other_body)
         return any(distance_info)
     

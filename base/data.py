@@ -1,5 +1,5 @@
 from typing import Tuple
-from attrs import define
+from attrs import define, field
 import pybullet as p
 import abc
 from .pose import SE3
@@ -87,18 +87,17 @@ class DynamicsInfo:
     body_type: int
     collision_margin: float
     
-
 @define(frozen=True)
 class Shape(abc.ABC):
-    rgba: Tuple
+    rgba: Tuple = field(converter=tuple)
     ghost: bool
-    viz_offset_xyz_xyzw: Tuple
-    col_offset_xyz_xyzw: Tuple
+    visual_offset_xyz_xyzw: Tuple = field(default=(0,0,0,0,0,0,1.), converter=tuple)
+    col_offset_xyz_xyzw: Tuple = field(default=(0,0,0,0,0,0,1.), converter=tuple)
 
     def get_viz_query(self) -> dict:
         return dict(
-            visualFramePosition=self.viz_offset.trans,
-            visualFrameOrientation=self.viz_offset.rot.as_quat(),
+            visualFramePosition=self.visual_offset.trans,
+            visualFrameOrientation=self.visual_offset.rot.as_quat(),
             rgbaColor=self.rgba
         )
     
@@ -109,11 +108,11 @@ class Shape(abc.ABC):
         )
     
     @property
-    def viz_offset(self): return SE3.from_xyz_xyzw(self.viz_offset_xyz_xyzw)
+    def visual_offset(self): return SE3.from_xyz_xyzw(self.visual_offset_xyz_xyzw)
     @property
     def col_offset(self): return SE3.from_xyz_xyzw(self.col_offset_xyz_xyzw)
 
-@define(frozen=True)
+@define(frozen=True, kw_only=True)
 class SphereShape(Shape):
     radius: float
 
@@ -129,4 +128,71 @@ class SphereShape(Shape):
         query.update(
             shapeType=p.GEOM_SPHERE,
             radius=self.radius)
+        return query
+
+@define(frozen=True, kw_only=True)
+class CylinderShape(Shape):
+    radius: float
+    length: float
+
+    def get_viz_query(self):
+        query = super().get_viz_query()
+        query.update(
+            shapeType=p.GEOM_CYLINDER,
+            radius=self.radius,
+            length=self.length,
+        )
+        return query
+    
+    def get_col_query(self):
+        query = super().get_col_query()
+        query.update(
+            shapeType=p.GEOM_CYLINDER,
+            radius=self.radius,
+            height=self.length,
+        )
+        return query
+    
+@define(frozen=True, kw_only=True)
+class BoxShape(Shape):
+    half_extents: Tuple = field(converter=tuple)
+
+    def get_viz_query(self):
+        query = super().get_viz_query()
+        query.update(
+            shapeType=p.GEOM_BOX,
+            halfExtents=self.half_extents,
+        )
+        return query
+    
+    def get_col_query(self):
+        query = super().get_col_query()
+        query.update(
+            shapeType=p.GEOM_BOX,
+            halfExtents=self.half_extents,
+        )
+        return query
+
+@define(frozen=True, kw_only=True)
+class MeshShape(Shape):
+    visual_mesh_path: str
+    col_mesh_path: str
+    scale: float
+
+    def get_viz_query(self):
+        query = super().get_viz_query()
+        query.update(
+            shapeType=p.GEOM_MESH,
+            fileName=self.visual_mesh_path,
+            meshScale=np.ones(3)*self.scale,
+        )
+        return query
+    
+    def get_col_query(self):
+        query = super().get_col_query()
+        query.update(
+            shapeType=p.GEOM_MESH,
+            fileName=self.col_mesh_path,
+            meshScale=np.ones(3)*self.scale,
+        )
         return query
