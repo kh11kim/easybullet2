@@ -109,7 +109,7 @@ class World(BulletClient):
         self.shapes[shape] = (viz_id, col_id)
         return self.shapes[shape]
     
-    def register_geometry(
+    def make_geometry_body(
         self, name:str, vis_id:int, col_id:int, 
         mass:float, body_cls:Type[AbstractBody], shape:Shape):
         if name in self.bodies:
@@ -117,15 +117,17 @@ class World(BulletClient):
                 raise ValueError(f"Body name already exists with different type!")
             ic("Body name already exists. Return the existing one")
             return self.bodies[name]
-        
+
         
         uid = self.createMultiBody(
             baseVisualShapeIndex=vis_id,
             baseCollisionShapeIndex=col_id,
             baseMass=mass)
-        return body_cls(
+        body = body_cls(
             world=self, uid=uid, 
             name=name, mass=mass, ghost=shape.ghost, shape=shape)
+        self.bodies[name] = body
+        return body
     
     def remove_body(self, body: str | AbstractBody):
         if isinstance(body, str):

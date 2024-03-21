@@ -26,7 +26,7 @@ class Sphere(Geometry):
     ):
         shape = SphereShape(rgba=rgba, ghost=ghost, radius=radius)
         vis_id, col_id = world.get_shape_id(shape)
-        return world.register_geometry(name, vis_id, col_id, mass, cls, shape)
+        return world.make_geometry_body(name, vis_id, col_id, mass, cls, shape)
         
 
 @define
@@ -49,7 +49,7 @@ class Cylinder(Geometry):
             col_offset_xyz_xyzw=offset.as_xyz_xyzw()
         )
         vis_id, col_id = world.get_shape_id(shape)
-        return world.register_geometry(name, vis_id, col_id, mass, cls, shape)
+        return world.make_geometry_body(name, vis_id, col_id, mass, cls, shape)
     
         # uid = world.createMultiBody(
         #     baseVisualShapeIndex=vis_id,
@@ -73,7 +73,7 @@ class Box(Geometry):
     ):
         shape = BoxShape(rgba=rgba, ghost=ghost, half_extents=half_extents)
         vis_id, col_id = world.get_shape_id(shape)
-        return world.register_geometry(name, vis_id, col_id, mass, cls, shape)
+        return world.make_geometry_body(name, vis_id, col_id, mass, cls, shape)
 
 @define
 class Mesh(Geometry):
@@ -102,7 +102,7 @@ class Mesh(Geometry):
             rgba=rgba,
             ghost=ghost)
         vis_id, col_id = world.get_shape_id(shape)
-        return world.register_geometry(name, vis_id, col_id, mass, cls, shape)
+        return world.make_geometry_body(name, vis_id, col_id, mass, cls, shape)
     
     @staticmethod
     def get_center(mesh_path, centering_type:str|None = "bb"):
@@ -125,6 +125,16 @@ class Mesh(Geometry):
             assert shape.col_mesh_path is not None, "No collision mesh"
             mesh_path = shape.col_mesh_path
         return trimesh.load(mesh_path)
+    
+    @classmethod
+    def from_trimesh(cls, name, world:World, mesh:trimesh.Trimesh, mass:float=0.5, rgba:ArrayLike=[1,0,0,1]):
+        import tempfile
+        dir = tempfile.TemporaryDirectory()
+        mesh_path = Path(dir.name) / "mesh.obj"
+        mesh.export(mesh_path, "obj")
+        obj = cls.create(name, world, mesh_path.as_posix(), mesh_path.as_posix(), mass=mass, rgba=rgba)
+        dir.cleanup()
+        return obj
 
 @define
 class Frame(Bodies):
