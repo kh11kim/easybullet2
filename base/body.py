@@ -1,6 +1,8 @@
+from __future__ import annotations
 import numpy as np
 from typing import List
 from attrs import define, field
+from pathlib import Path
 from icecream import ic
 from .world import World, AbstractBody
 from .pose import SE3, SO3
@@ -58,7 +60,7 @@ class URDF(AbstractBody):
         cls,
         name,
         world:World,
-        path,
+        path:Path|str,
         mass:float=0.5,
         fixed:bool = True,
         scale:float = 1.,
@@ -95,34 +97,13 @@ class URDF(AbstractBody):
     @classmethod
     def from_trimesh(cls, name:str, world:World, mesh:trimesh.Trimesh, fixed:bool):
         import tempfile
-        tempdir = tempfile.TemporaryDirectory()
-        urdf_path = generate_temp_urdf(mesh, tempdir.name)
-        obj = cls.create(
-            name, world, 
-            urdf_path, fixed=fixed, scale=1.)
-        tempdir.cleanup()
+        with tempfile.TemporaryDirectory() as tempdir:
+            urdf_path = generate_temp_urdf(mesh, tempdir)
+            obj = cls.create(
+                name, world, 
+                urdf_path, fixed=fixed, scale=1.)
         return obj
 
-    # def __attrs_post_init__(self):
-    #     self.uid = self.client.loadURDF(
-    #         fileName=str(self.path),
-    #         useFixedBase=self.fixed,
-    #     )
-    #     self.dof = self.client.getNumJoints(self.uid)
-    #     self.joint_info = []
-    #     movable_joints = []
-    #     for i in range(self.dof):
-    #         info = JointInfo(*self.client.getJointInfo(self.uid, i))
-    #         self.joint_info.append(info)
-    #         if info.movable:
-    #             movable_joints.append(i)
-    #     self.movable_joints = np.array(movable_joints)
-        
-    #     #default ctrl gains
-    #     self.pos_ctrl_gain_p = [0.01] * len(self.movable_joints)
-    #     self.pos_ctrl_gain_d = [1.0] * len(self.movable_joints)
-    #     self.max_torque = [250] * len(self.movable_joints)
-        # super().__attrs_post_init__()
     
     @property
     def lb(self):

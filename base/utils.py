@@ -26,9 +26,9 @@ class HideOutput:
         os.dup2(self._oldstdout_fno, 1)
 
 
-def generate_temp_urdf(mesh_path: str, tempdir: str):
-    mesh = trimesh.load(mesh_path)
-    
+def generate_temp_urdf(mesh: trimesh.Trimesh, tempdir: str):
+    mesh_path = Path(tempdir) / "mesh.obj"
+    mesh.export(mesh_path, "obj")
     mesh_offset = - mesh.centroid
     offset_str = str(mesh_offset.round(3)).replace("[", "").replace("]", "")
     
@@ -46,7 +46,7 @@ def generate_temp_urdf(mesh_path: str, tempdir: str):
             xyz=offset_str, rpy="0 0 0")
         geometry = ET.SubElement(element, "geometry")
         geometry_mesh = ET.SubElement(geometry, "mesh",
-            filename="temp.obj", scale="1 1 1")
+            filename="mesh.obj", scale="1 1 1")
     material = ET.SubElement(visual, "material", name="white")
     ET.SubElement(material, "color", rgba="1 1 1 1")
 

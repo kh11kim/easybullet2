@@ -124,18 +124,23 @@ class Mesh(Geometry):
         cls, 
         name, 
         world:World, 
-        mesh:trimesh.Trimesh, 
+        mesh:trimesh.Trimesh,
+        col_mesh:trimesh.Trimesh|None=None,
         mass:float=0.5, 
-        rgba:ArrayLike=[1,0,0,1],
-        fixed:bool=False
+        rgba:ArrayLike=[1,0,0,1]
     ):
         import tempfile
         tempdir = tempfile.TemporaryDirectory()
+        if col_mesh is None: 
+            col_mesh = mesh
+
         mesh_path = Path(tempdir.name) / "mesh.obj"
+        col_mesh_path = Path(tempdir.name) / "col_mesh.obj"
         mesh.export(mesh_path, "obj")
+        col_mesh.export(col_mesh_path, "obj")
         obj = cls.create(
             name, world, 
-            mesh_path.as_posix(), mesh_path.as_posix(), 
+            str(mesh_path), str(col_mesh_path), 
             mass=mass, rgba=rgba)
         tempdir.cleanup()
         return obj

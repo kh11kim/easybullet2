@@ -181,9 +181,9 @@ class World(BulletClient):
         return [DistanceInfo(*info) for info in results]
     
     def wait_for_rest(self, timeout=2.0, polling_dt= 0.1, tol=0.01):
-        timesteps = int(timeout / self.dt)
+        timesteps = int(timeout / polling_dt)
         polling_steps = int(1 / polling_dt)
-        for _ in timesteps:
+        for _ in range(timesteps):
             for _ in range(polling_steps):
                 self.step()
             
