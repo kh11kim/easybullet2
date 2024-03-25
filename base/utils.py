@@ -1,4 +1,8 @@
 import sys, os
+import trimesh
+import xml.etree.cElementTree as ET
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 class HideOutput:
     '''
@@ -20,3 +24,34 @@ class HideOutput:
         sys.stdout = self._origstdout
         sys.stdout.flush()
         os.dup2(self._oldstdout_fno, 1)
+
+
+def generate_temp_urdf(mesh_path: str, tempdir: str):
+    mesh = trimesh.load(mesh_path)
+    
+    mesh_offset = - mesh.centroid
+    offset_str = str(mesh_offset.round(3)).replace("[", "").replace("]", "")
+    
+    urdf_name = "temp"
+    root = ET.Element("robot", name=urdf_name+".urdf")
+    link = ET.SubElement(root, "link", name="mesh")
+    inertial = ET.SubElement(link, "inertial")
+    visual = ET.SubElement(link, "visual")
+    collision = ET.SubElement(link, "collision")
+    ET.SubElement(inertial, "mass", value="1")
+    ET.SubElement(inertial, "inertia", 
+        ixx="0.1", ixy="0", ixz="0", iyy="0.1", iyz="0", izz="0.1")
+    for element in [visual, collision]:
+        origin = ET.SubElement(element, "origin",
+            xyz=offset_str, rpy="0 0 0")
+        geometry = ET.SubElement(element, "geometry")
+        geometry_mesh = ET.SubElement(geometry, "mesh",
+            filename="temp.obj", scale="1 1 1")
+    material = ET.SubElement(visual, "material", name="white")
+    ET.SubElement(material, "color", rgba="1 1 1 1")
+
+    tree = ET.ElementTree(root)
+    ET.indent(tree, '  ')
+    urdf_path = Path(tempdir) / "temp.urdf"
+    tree.write(urdf_path, encoding="utf-8", xml_declaration=True)
+    return urdf_path

@@ -71,19 +71,20 @@ class Camera:
         t =np.asarray(eye_pos)
         return SE3(SO3.from_matrix(rot_mat), t)
     
-    def render(self, cam_pose:SE3):
+    def render(self, cam_pose:SE3, render_mode="tiny"):
         """output: rgb, depth, seg"""
         cam_pose_opengl = cam_pose @ SE3(SO3.from_euler("xyz", [np.pi,0,0]))
         view_matrix = list(cam_pose_opengl.inverse().as_matrix().flatten("F"))
         proj_matrix = list(self.intrinsic.get_projection_matrix_opengl())
         
         #result: (width, height, rgb, depth, seg)
+        renderer = p.ER_BULLET_HARDWARE_OPENGL if render_mode != "tiny" else p.ER_TINY_RENDERER
         result = self.world.getCameraImage(
             width=self.intrinsic.width,
             height=self.intrinsic.height,
             viewMatrix=view_matrix,
             projectionMatrix=proj_matrix,
-            renderer=p.ER_TINY_RENDERER)
+            renderer=renderer)
         w, h = self.intrinsic.width, self.intrinsic.height
         far, near = self.intrinsic.far, self.intrinsic.near
         rgb = np.reshape(result[2], (h, w, 4))[:,:,:3] * 1. / 255.

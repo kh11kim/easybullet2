@@ -5,46 +5,16 @@ from icecream import ic
 from .world import World, AbstractBody
 from .pose import SE3, SO3
 from .data import *
+from .utils import generate_temp_urdf
 from contextlib import contextmanager
+import trimesh
 
 
 @define
 class Geometry(AbstractBody):
     shape: Shape
+    ghost: bool
 
-# @define
-# class URDF(AbstractBody):
-#     path: str
-#     scale: float = 1.
-#     #pose: SE3 = field(factory=lambda : SE3.identity())
-    
-#     @classmethod
-#     def create(cls, world, name, path, scale:float, fixed:bool):
-#         uid = world.loadURDF(
-#             fileName=str(path),
-#             useFixedBase=fixed,
-#             globalScaling=scale,
-#         )
-#         return cls(
-#             world=world,
-#             name=name,
-#             path=path,
-#             scale=scale
-#         )
-#     def __attrs_post_init__(self):
-#         super().__attrs_post_init__() # register body
-        
-# #urdf
-# if self.body_type == "urdf":
-#     link_num = len(self.joint_info) #TODO
-#     lowers, uppers = [], []
-#     for link in [-1, *range(link_num)]:
-#         lower, upper = \
-#             self.client.getAABB(self.uid, linkIndex=link)
-#         lowers.append(lower)
-#         uppers.append(upper)
-#     lower = np.min(lowers, axis=0)
-#     upper = np.max(uppers, axis=0)
 
 @define
 class Bodies:
@@ -89,6 +59,7 @@ class URDF(AbstractBody):
         name,
         world:World,
         path,
+        mass:float=0.5,
         fixed:bool = True,
         scale:float = 1.,
     ):
@@ -117,9 +88,21 @@ class URDF(AbstractBody):
         max_torque = [250] * len(movable_joints)
         
         return cls(
+            world, uid, name, mass,
             path, fixed, scale, dof, joint_info, movable_joints,
             pos_ctrl_gain_p, pos_ctrl_gain_d, max_torque)
     
+    @classmethod
+    def from_trimesh(cls, name:str, world:World, mesh:trimesh.Trimesh, fixed:bool):
+        import tempfile
+        tempdir = tempfile.TemporaryDirectory()
+        urdf_path = generate_temp_urdf(mesh, tempdir.name)
+        obj = cls.create(
+            name, world, 
+            urdf_path, fixed=fixed, scale=1.)
+        tempdir.cleanup()
+        return obj
+
     # def __attrs_post_init__(self):
     #     self.uid = self.client.loadURDF(
     #         fileName=str(self.path),
@@ -224,3 +207,4 @@ class URDF(AbstractBody):
             objAccelerations=np.zeros_like(q).tolist()
         )
         return np.vstack([jac_trans, jac_rot])
+    

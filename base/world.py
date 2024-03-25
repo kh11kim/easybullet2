@@ -5,6 +5,7 @@ import numpy as np
 import pybullet as p
 from icecream import ic
 from pybullet_utils.bullet_client import BulletClient
+from contextlib import contextmanager
 from .pose import SE3, SO3
 from .utils import HideOutput
 from typing import *
@@ -68,23 +69,46 @@ class World(BulletClient):
             self.pause_button_uid = p.addUserDebugParameter("turn off loop",1,0,1)
         
         self.set_gravity()
+        self.watch_workspace()
+
+    @contextmanager
+    def no_rendering(self):
+        self.configureDebugVisualizer(
+            p.COV_ENABLE_RENDERING, 0)
+        yield
+        self.configureDebugVisualizer(
+            p.COV_ENABLE_RENDERING, 1)
+
+    def watch_workspace(
+        self, 
+        target_pos=[0,0,0], 
+        distance=1.0, 
+        cam_yaw=45, 
+        cam_pitch=-35
+    ):
+        self.resetDebugVisualizerCamera(
+            cameraDistance=distance,
+            cameraYaw=cam_yaw,
+            cameraPitch=cam_pitch,
+            cameraTargetPosition=target_pos)
 
     def get_body(self, name):
         if name in self.bodies:
             return self.bodies[name]
         return None
-            
+    
     def set_gravity(self, force_z=-9.81):
-        self.setGravity(0, 0, -9.81)
+        self.setGravity(0, 0, force_z)
         
     def step(self, no_dynamics=False):
         if no_dynamics:
             self.performCollisionDetection()
         else:
             self.stepSimulation()
-            
+        
+        # add delay for realtime visualization
         if self.vis_delay != 0. and int(self.t / self.dt) % (1/self.vis_delay) == 0:
-            time.sleep(self.vis_delay/3) # add delay for visualize
+            time.sleep(self.vis_delay/3) 
         self.t += self.dt
         
     def show(self):
@@ -118,7 +142,6 @@ class World(BulletClient):
             ic("Body name already exists. Return the existing one")
             return self.bodies[name]
 
-        
         uid = self.createMultiBody(
             baseVisualShapeIndex=vis_id,
             baseCollisionShapeIndex=col_id,
@@ -144,9 +167,6 @@ class World(BulletClient):
         tol:float=0.,
     ):
         """world.step(no_dynamics=True) should be called before using"""
-        
-        link_index1 = -1
-        
         if (link1 is None) and (link2 is None):
             link1, link2 = -1, -1
         elif (link1 is not None) and (link2 is not None):
@@ -159,6 +179,25 @@ class World(BulletClient):
             bodyA=body1.uid, bodyB=body2.uid, 
             linkIndexA=link1, linkIndexB=link2, distance=tol)
         return [DistanceInfo(*info) for info in results]
+    
+    def wait_for_rest(self, timeout=2.0, polling_dt= 0.1, tol=0.01):
+        timesteps = int(timeout / self.dt)
+        polling_steps = int(1 / polling_dt)
+        for _ in timesteps:
+            for _ in range(polling_steps):
+                self.step()
+            
+            chk_bodies_rest = [
+                np.linalg.norm(body.get_velocity()) < tol
+                for body in self.bodies.values()
+            ]
+            if all(chk_bodies_rest):
+                return True
+        return False
+
+    def make_fixed_constraint(self):
+        raise NotImplementedError("haha")
+
 
 
 @define
@@ -167,7 +206,6 @@ class AbstractBody(abc.ABC):
     uid: int
     name: str
     mass: float
-    ghost:bool
     
     def set_pose(self, pose: SE3):
         self.world.resetBasePositionAndOrientation(
@@ -177,6 +215,10 @@ class AbstractBody(abc.ABC):
         pos, orn = self.world.getBasePositionAndOrientation(self.uid)
         return SE3(SO3.from_quat(orn), pos)
 
+    def get_velocity(self):
+        linear, angular = self.world.getBaseVelocity(self.uid)
+        return linear, angular
+    
     def is_collision_with(self, other_body:AbstractBody):
         distance_info = self.get_distance_info(self, other_body)
         return any(distance_info)
@@ -210,3 +252,4 @@ if __name__ == "__main__":
     world = World()
     world.set_gravity()
     world.show()
+    

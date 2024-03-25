@@ -3,9 +3,10 @@ from attrs import define, field
 from numpy.typing import ArrayLike
 import abc
 from .world import World, AbstractBody
-from .body import Geometry, Bodies
+from .body import Geometry, Bodies, URDF
 from .pose import SE3
 from .data import *
+from .utils import generate_temp_urdf
 from pathlib import Path
 import trimesh
 from icecream import ic
@@ -50,15 +51,7 @@ class Cylinder(Geometry):
         )
         vis_id, col_id = world.get_shape_id(shape)
         return world.make_geometry_body(name, vis_id, col_id, mass, cls, shape)
-    
-        # uid = world.createMultiBody(
-        #     baseVisualShapeIndex=vis_id,
-        #     baseCollisionShapeIndex=col_id,
-        #     baseMass=mass)
-        # return cls(
-        #     world=world, uid=uid, 
-        #     name=name, mass=mass, ghost=ghost, shape=shape)
-
+  
 @define
 class Box(Geometry):
     @classmethod
@@ -87,7 +80,7 @@ class Mesh(Geometry):
         centering_type:str|None = "bb", # bb(bounding box center), centroid, None
         scale:float = 1.,
         mass:float=0.5,
-        rgba:Tuple[float]=(1, 0, 0, 1),
+        rgba:Tuple[float]=(1, 0, 0, 1)
     ):
         """We assume that visual mesh is in the same coordinate as collision mesh"""
         center = Mesh.get_center(visual_mesh_path, centering_type)
@@ -127,13 +120,24 @@ class Mesh(Geometry):
         return trimesh.load(mesh_path)
     
     @classmethod
-    def from_trimesh(cls, name, world:World, mesh:trimesh.Trimesh, mass:float=0.5, rgba:ArrayLike=[1,0,0,1]):
+    def from_trimesh(
+        cls, 
+        name, 
+        world:World, 
+        mesh:trimesh.Trimesh, 
+        mass:float=0.5, 
+        rgba:ArrayLike=[1,0,0,1],
+        fixed:bool=False
+    ):
         import tempfile
-        dir = tempfile.TemporaryDirectory()
-        mesh_path = Path(dir.name) / "mesh.obj"
+        tempdir = tempfile.TemporaryDirectory()
+        mesh_path = Path(tempdir.name) / "mesh.obj"
         mesh.export(mesh_path, "obj")
-        obj = cls.create(name, world, mesh_path.as_posix(), mesh_path.as_posix(), mass=mass, rgba=rgba)
-        dir.cleanup()
+        obj = cls.create(
+            name, world, 
+            mesh_path.as_posix(), mesh_path.as_posix(), 
+            mass=mass, rgba=rgba)
+        tempdir.cleanup()
         return obj
 
 @define
