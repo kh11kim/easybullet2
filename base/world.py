@@ -132,30 +132,15 @@ class World(BulletClient):
         
         self.shapes[shape] = (viz_id, col_id)
         return self.shapes[shape]
-    
-    def make_geometry_body(
-        self, name:str, vis_id:int, col_id:int, 
-        mass:float, body_cls:Type[AbstractBody], shape:Shape):
-        if name in self.bodies:
-            if body_cls is not type(self.bodies[name]):
-                raise ValueError(f"Body name already exists with different type!")
-            ic("Body name already exists. Return the existing one")
-            return self.bodies[name]
 
-        uid = self.createMultiBody(
-            baseVisualShapeIndex=vis_id,
-            baseCollisionShapeIndex=col_id,
-            baseMass=mass)
-        body = body_cls(
-            world=self, uid=uid, 
-            name=name, mass=mass, ghost=shape.ghost, shape=shape)
-        self.bodies[name] = body
-        return body
-    
     def remove_body(self, body: str | AbstractBody):
-        if isinstance(body, str):
-            body = self.bodies[body]
-        self.removeBody(body.uid)
+        if isinstance(body, BodyContainer):
+            for b in body.bodies:
+                self.removeBody(b.uid) # delete all contained bodies
+        else: 
+            if isinstance(body, str):
+                body = self.bodies[body]
+            self.removeBody(body.uid)
         del self.bodies[body.name]
     
     def get_distance_info(
@@ -200,7 +185,7 @@ class World(BulletClient):
 
 
 
-@define
+@define(repr=False)
 class AbstractBody(abc.ABC):
     world: World
     uid: int
@@ -244,8 +229,41 @@ class AbstractBody(abc.ABC):
         lower, upper = self.world.getAABB(self.uid, linkIndex=-1)
         lower, upper = np.array(lower), np.array(upper)
         return lower, upper
+    
+    def __repr__(self):
+        return f"{self.__class__.__name__}:{self.name}"
         
+@define
+class BodyContainer:
+    """Body container"""
+    name: str
+    world: World
+    bodies: List[AbstractBody]
+    relative_poses: List[AbstractBody]
+    pose: SE3 = field(factory=lambda : SE3.identity())
 
+    def __attrs_post_init__(self):
+        for body in self.bodies:
+            del self.world.bodies[body.name]
+        self.world.bodies[self.name] = self
+
+    @classmethod
+    def from_bodies(cls, name:str, bodies:List[AbstractBody]):
+        """ The first body will be the reference body"""
+        world = bodies[0].world
+        rel_poses = [body.get_pose() for body in bodies]
+        ref_pose = rel_poses[0]
+        rel_poses = [ref_pose.inverse()@pose for pose in rel_poses]
+        return cls(name, world, bodies, rel_poses, ref_pose)
+    
+    def get_pose(self):
+        return self.pose
+    
+    def set_pose(self, pose:SE3):
+        self.pose = pose
+        poses = [self.pose@pose for pose in self.relative_poses]
+        for pose, body in zip(poses, self.bodies):
+            body.set_pose(pose)
     
         
 if __name__ == "__main__":

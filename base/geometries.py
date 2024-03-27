@@ -3,7 +3,7 @@ from attrs import define, field
 from numpy.typing import ArrayLike
 import abc
 from .world import World, AbstractBody
-from .body import Geometry, Bodies, URDF
+from .body import Geometry, URDF
 from .pose import SE3
 from .data import *
 from .utils import generate_temp_urdf
@@ -13,7 +13,7 @@ from icecream import ic
 
     
 
-@define
+@define(repr=False)
 class Sphere(Geometry):
     @classmethod
     def create(
@@ -27,10 +27,10 @@ class Sphere(Geometry):
     ):
         shape = SphereShape(rgba=rgba, ghost=ghost, radius=radius)
         vis_id, col_id = world.get_shape_id(shape)
-        return world.make_geometry_body(name, vis_id, col_id, mass, cls, shape)
+        return cls.make_geometry_body(name, world, vis_id, col_id, mass, shape)
         
 
-@define
+@define(repr=False)
 class Cylinder(Geometry):
     @classmethod
     def create(
@@ -50,9 +50,9 @@ class Cylinder(Geometry):
             col_offset_xyz_xyzw=offset.as_xyz_xyzw()
         )
         vis_id, col_id = world.get_shape_id(shape)
-        return world.make_geometry_body(name, vis_id, col_id, mass, cls, shape)
+        return cls.make_geometry_body(name, world, vis_id, col_id, mass, shape)
   
-@define
+@define(repr=False)
 class Box(Geometry):
     @classmethod
     def create(
@@ -66,9 +66,9 @@ class Box(Geometry):
     ):
         shape = BoxShape(rgba=rgba, ghost=ghost, half_extents=half_extents)
         vis_id, col_id = world.get_shape_id(shape)
-        return world.make_geometry_body(name, vis_id, col_id, mass, cls, shape)
+        return cls.make_geometry_body(name, world, vis_id, col_id, mass, shape)
 
-@define
+@define(repr=False)
 class Mesh(Geometry):
     @classmethod
     def create(
@@ -95,7 +95,7 @@ class Mesh(Geometry):
             rgba=rgba,
             ghost=ghost)
         vis_id, col_id = world.get_shape_id(shape)
-        return world.make_geometry_body(name, vis_id, col_id, mass, cls, shape)
+        return cls.make_geometry_body(name, world, vis_id, col_id, mass, shape)
     
     @staticmethod
     def get_center(mesh_path, centering_type:str|None = "bb"):
@@ -145,28 +145,28 @@ class Mesh(Geometry):
         tempdir.cleanup()
         return obj
 
-@define
-class Frame(Bodies):
-    @classmethod
-    def create(
-        cls, name, world, 
-        pose=SE3.identity(), radius=0.004, length=0.04):
-        raise NotImplementedError
-        viz_offsets = [
-            SE3.from_xyz_xyzw([length/2,0,0, 0, 0.7071, 0, 0.7071]),
-            SE3.from_xyz_xyzw([0,length/2,0,-0.7071, 0, 0, 0.7071]),
-            SE3.from_xyz_xyzw([0,0,length/2,0, 0, 0,1]),
-        ]
-        axes_names = "xyz"
-        axes = []
-        rgb = np.eye(3)
-        for i, axis_name in enumerate(axes_names):
-            axes += [Cylinder.create(
-                name+axis_name, world,
-                radius, length, ghost=True, 
-                rgba=tuple([*rgb[i],1.]),
-                offset=viz_offsets[i]
-            )]
-        frame = cls.from_bodies(axes)
-        frame.set_pose(pose)
-        return frame
+# @define
+# class Frame(BodyContainer):
+#     @classmethod
+#     def create(
+#         cls, name, world, 
+#         pose=SE3.identity(), radius=0.004, length=0.04):
+#         raise NotImplementedError
+#         viz_offsets = [
+#             SE3.from_xyz_xyzw([length/2,0,0, 0, 0.7071, 0, 0.7071]),
+#             SE3.from_xyz_xyzw([0,length/2,0,-0.7071, 0, 0, 0.7071]),
+#             SE3.from_xyz_xyzw([0,0,length/2,0, 0, 0,1]),
+#         ]
+#         axes_names = "xyz"
+#         axes = []
+#         rgb = np.eye(3)
+#         for i, axis_name in enumerate(axes_names):
+#             axes += [Cylinder.create(
+#                 name+axis_name, world,
+#                 radius, length, ghost=True, 
+#                 rgba=tuple([*rgb[i],1.]),
+#                 offset=viz_offsets[i]
+#             )]
+#         frame = cls.from_bodies(axes)
+#         frame.set_pose(pose)
+#         return frame

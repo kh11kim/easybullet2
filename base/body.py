@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from typing import List
+from typing import List, Type
 from attrs import define, field
 from pathlib import Path
 from icecream import ic
@@ -17,33 +17,30 @@ class Geometry(AbstractBody):
     shape: Shape
     ghost: bool
 
-
-@define
-class Bodies:
-    """Body container"""
-    bodies: List[AbstractBody]
-    relative_poses: List[AbstractBody]
-    pose: SE3 = field(factory=lambda : SE3.identity())
-
     @classmethod
-    def from_bodies(cls, bodies:List[AbstractBody]):
-        """ The first body will be the reference body"""
-        rel_poses = [body.get_pose() for body in bodies]
-        ref_pose = rel_poses[0]
-        rel_poses = [ref_pose.inverse()@pose for pose in rel_poses]
-        return cls(bodies, rel_poses, ref_pose)
-    
-    def get_pose(self):
-        return self.pose
-    
-    def set_pose(self, pose:SE3):
-        self.pose = pose
-        poses = [self.pose@pose for pose in self.relative_poses]
-        for pose, body in zip(poses, self.bodies):
-            body.set_pose(pose)
+    def make_geometry_body(
+        cls, name:str, world:World, vis_id:int, col_id:int, 
+        mass:float, shape:Shape):
+        if name in world.bodies:
+            if cls is not type(world.bodies[name]):
+                raise ValueError(f"Body name already exists with different type!")
+            ic("Body name already exists. Return the existing one")
+            return world.bodies[name]
+
+        uid = world.createMultiBody(
+            baseVisualShapeIndex=vis_id,
+            baseCollisionShapeIndex=col_id,
+            baseMass=mass)
+        body = cls(
+            world=world, uid=uid, 
+            name=name, mass=mass, ghost=shape.ghost, shape=shape)
+        world.bodies[name] = body
+        return body
 
 
-@define
+
+
+@define(repr=False)
 class URDF(AbstractBody):
     path: str
     fixed: bool
@@ -89,10 +86,12 @@ class URDF(AbstractBody):
         pos_ctrl_gain_d = [1.0] * len(movable_joints)
         max_torque = [250] * len(movable_joints)
         
-        return cls(
+        body = cls(
             world, uid, name, mass,
             path, fixed, scale, dof, joint_info, movable_joints,
             pos_ctrl_gain_p, pos_ctrl_gain_d, max_torque)
+        world.bodies[name] = body
+        return body
     
     @classmethod
     def from_trimesh(cls, name:str, world:World, mesh:trimesh.Trimesh, fixed:bool):
