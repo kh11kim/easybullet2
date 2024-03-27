@@ -22,10 +22,8 @@ class Geometry(AbstractBody):
         cls, name:str, world:World, vis_id:int, col_id:int, 
         mass:float, shape:Shape):
         if name in world.bodies:
-            if cls is not type(world.bodies[name]):
-                raise ValueError(f"Body name already exists with different type!")
-            ic("Body name already exists. Return the existing one")
-            return world.bodies[name]
+            ic("Body name already exists. Recreate")
+            world.remove_body(name)
 
         uid = world.createMultiBody(
             baseVisualShapeIndex=vis_id,
@@ -63,10 +61,8 @@ class URDF(AbstractBody):
         scale:float = 1.,
     ):
         if name in world.bodies:
-            if cls is not type(world.bodies[name]):
-                raise ValueError(f"Body name already exists with different type!")
-            ic("Body name already exists. Return the existing one")
-            return world.bodies[name]
+            ic("Body name already exists. Recreate")
+            world.remove_body(name)
         
         uid = world.loadURDF(
             fileName=str(path),

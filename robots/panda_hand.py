@@ -24,6 +24,9 @@ class PandaHand(BodyContainer):
         is_in_swept_vol = self.swept_vol.is_collision_with(target_obj)
         return is_in_swept_vol and not is_col_gripper
 
+    def is_grasped(self, target_obj:AbstractBody):
+        return self.hand.is_collision_with(target_obj)
+    
     def set_pose(self, pose:SE3):
         base_pose = pose @ self.T_tcp_base
         super().set_pose(base_pose)
@@ -45,6 +48,7 @@ class PandaHand(BodyContainer):
             self.hand.set_ctrl_target_joint_angles(q_target)
             self.world.step()
 
+    
 
     @classmethod
     def create(cls, name:str, world:World):

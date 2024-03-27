@@ -152,17 +152,13 @@ class World(BulletClient):
         tol:float=0.,
     ):
         """world.step(no_dynamics=True) should be called before using"""
-        if (link1 is None) and (link2 is None):
-            link1, link2 = -1, -1
-        elif (link1 is not None) and (link2 is not None):
-            pass
-        elif link1 is not None:
-            link1 = -1
-        else:
-            raise NotImplementedError("?")
-        results = self.getClosestPoints(
-            bodyA=body1.uid, bodyB=body2.uid, 
-            linkIndexA=link1, linkIndexB=link2, distance=tol)
+        kwargs = dict()
+        kwargs["bodyA"] = body1.uid
+        kwargs["bodyB"] = body2.uid
+        if link1 is not None: kwargs['linkIndexA'] = link1
+        if link2 is not None: kwargs['linkIndexB'] = link2
+        kwargs["distance"] = tol
+        results = self.getClosestPoints(**kwargs)
         return [DistanceInfo(*info) for info in results]
     
     def wait_for_rest(self, timeout=2.0, polling_dt= 0.1, tol=0.01):
@@ -205,7 +201,7 @@ class AbstractBody(abc.ABC):
         return linear, angular
     
     def is_collision_with(self, other_body:AbstractBody):
-        distance_info = self.get_distance_info(self, other_body)
+        distance_info = self.world.get_distance_info(self, other_body)
         return any(distance_info)
     
     def is_in_collision(self):
@@ -240,7 +236,7 @@ class BodyContainer:
     world: World
     bodies: List[AbstractBody]
     relative_poses: List[AbstractBody]
-    pose: SE3 = field(factory=lambda : SE3.identity())
+    #pose: SE3 = field(factory=lambda : SE3.identity())
 
     def __attrs_post_init__(self):
         for body in self.bodies:
@@ -254,14 +250,14 @@ class BodyContainer:
         rel_poses = [body.get_pose() for body in bodies]
         ref_pose = rel_poses[0]
         rel_poses = [ref_pose.inverse()@pose for pose in rel_poses]
-        return cls(name, world, bodies, rel_poses, ref_pose)
+        return cls(name, world, bodies, rel_poses)
     
     def get_pose(self):
-        return self.pose
+        return self.bodies[0].get_pose()
     
     def set_pose(self, pose:SE3):
-        self.pose = pose
-        poses = [self.pose@pose for pose in self.relative_poses]
+        #self.pose = pose
+        poses = [pose@rel_pose for rel_pose in self.relative_poses]
         for pose, body in zip(poses, self.bodies):
             body.set_pose(pose)
     
