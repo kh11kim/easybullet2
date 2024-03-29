@@ -127,7 +127,8 @@ class Mesh(Geometry):
         mesh:trimesh.Trimesh,
         col_mesh:trimesh.Trimesh|None=None,
         mass:float=0.5, 
-        rgba:ArrayLike=[1,0,0,1]
+        rgba:ArrayLike=[1,0,0,1],
+        centering_type=None,
     ):
         import tempfile
         tempdir = tempfile.TemporaryDirectory()
@@ -141,6 +142,7 @@ class Mesh(Geometry):
         obj = cls.create(
             name, world, 
             str(mesh_path), str(col_mesh_path), 
+            centering_type=centering_type,
             mass=mass, rgba=rgba)
         tempdir.cleanup()
         return obj

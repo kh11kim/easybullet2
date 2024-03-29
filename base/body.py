@@ -108,6 +108,7 @@ class URDF(AbstractBody):
     def lb(self):
         return np.array([joint.joint_lower_limit  for joint in self.joint_info if joint.movable])
     
+    @property
     def ub(self):
         return np.array([joint.joint_upper_limit  for joint in self.joint_info if joint.movable])
     
@@ -146,10 +147,21 @@ class URDF(AbstractBody):
         for i, angle in zip(self.movable_joints, angles):
             self.set_joint_angle(i, angle)
     
+    def get_joint_frame_pose(self, joint_idx):
+        assert len(self.joint_info) > joint_idx
+        parent_link_idx = joint_idx - 1
+        parent_link_pose = self.get_link_pose(parent_link_idx)
+        pos = self.joint_info[joint_idx].parent_frame_pos
+        quat = self.joint_info[joint_idx].parent_frame_orn
+        rel_pose = SE3(SO3.from_quat(quat), pos)
+        return parent_link_pose @ rel_pose
+
     def get_link_pose(self, link_idx):
         assert len(self.joint_info) > link_idx
+        if link_idx == -1:
+            return super().get_pose()
         pos, xyzw = self.world.getLinkState(self.uid, link_idx)[:2]
-        return SE3(SO3(xyzw), pos)
+        return SE3(SO3.from_quat(xyzw), pos)
     
     def forward_kinematics(self, q:ArrayLike, link_idx:int):
         with self.set_joint_angles_context(q):
