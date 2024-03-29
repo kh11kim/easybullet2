@@ -49,6 +49,10 @@ class URDF(AbstractBody):
     pos_ctrl_gain_p: List[float]
     pos_ctrl_gain_d: List[float]
     max_torque: List[float]
+    offset: SE3 = field(init=False)
+
+    def __attrs_post_init__(self):
+        self.offset = super().get_pose()
 
     @classmethod
     def create(
@@ -85,7 +89,8 @@ class URDF(AbstractBody):
         body = cls(
             world, uid, name, mass,
             path, fixed, scale, dof, joint_info, movable_joints,
-            pos_ctrl_gain_p, pos_ctrl_gain_d, max_torque)
+            pos_ctrl_gain_p, pos_ctrl_gain_d, max_torque
+        )
         world.bodies[name] = body
         return body
     
@@ -98,7 +103,6 @@ class URDF(AbstractBody):
                 name, world, 
                 urdf_path, fixed=fixed, scale=1.)
         return obj
-
     
     @property
     def lb(self):
@@ -106,16 +110,25 @@ class URDF(AbstractBody):
     
     def ub(self):
         return np.array([joint.joint_upper_limit  for joint in self.joint_info if joint.movable])
+    
     @property
     def neutral(self):
         return (self.lb + self.ub)/2
     
     @contextmanager
-    def apply_joints(self, q):
+    def set_joint_angles_context(self, q):
         joints_temp = self.get_joint_angles()
         self.set_joint_angles(q)
         yield
         self.set_joint_angles(joints_temp)
+    
+    def set_pose(self, pose):
+        """ This is because, simple setting pose is setting a pose of base inertia frame.
+        This differs from initial load state of the URDF."""
+        super().set_pose(pose @ self.offset)
+    
+    def get_pose(self):
+        return self.offset.inverse() @ super().get_pose()
     
     def get_joint_states(self):
         return [JointState(*s) 
@@ -139,7 +152,7 @@ class URDF(AbstractBody):
         return SE3(SO3(xyzw), pos)
     
     def forward_kinematics(self, q:ArrayLike, link_idx:int):
-        with self.apply_joints(q):
+        with self.set_joint_angles_context(q):
             pose = self.get_link_pose(link_idx)
         return pose
     
