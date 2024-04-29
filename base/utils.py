@@ -28,6 +28,8 @@ class HideOutput:
 
 def generate_temp_urdf(mesh: trimesh.Trimesh, tempdir: str):
     mesh_path = Path(tempdir) / "mesh.obj"
+    if mesh_path.exists():
+        mesh_path.unlink()
     mesh.export(mesh_path, "obj")
     mesh_offset = - mesh.centroid
     offset_str = str(mesh_offset.round(3)).replace("[", "").replace("]", "")

@@ -261,6 +261,8 @@ class BodyContainer:
         for pose, body in zip(poses, self.bodies):
             body.set_pose(pose)
     
+    def get_velocity(self):
+        return self.bodies[0].get_velocity()
         
 if __name__ == "__main__":
     world = World()

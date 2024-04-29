@@ -25,7 +25,9 @@ class PandaHand(BodyContainer):
         return is_in_swept_vol and not is_col_gripper
 
     def is_grasped(self, target_obj:AbstractBody):
-        return self.hand.is_collision_with(target_obj)
+        base_col = any(self.world.get_distance_info(self.hand, target_obj, -1, -1))
+        col = self.hand.is_collision_with(target_obj)
+        return not base_col and col
     
     def set_pose(self, pose:SE3):
         base_pose = pose @ self.T_tcp_base
@@ -52,6 +54,9 @@ class PandaHand(BodyContainer):
 
     @classmethod
     def create(cls, name:str, world:World):
+        if name in world.bodies:
+            ic("Body name already exists.")
+            return world.bodies[name]
         hand_urdf_path = Path("../assets/panda/hand.urdf")
         hand = URDF.create(name, world, hand_urdf_path, fixed=True)
         box_half_extents = [0.0085, 0.04, 0.0085]

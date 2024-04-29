@@ -175,8 +175,8 @@ class BoxShape(Shape):
 
 @define(frozen=True, kw_only=True)
 class MeshShape(Shape):
-    visual_mesh_path: str
-    col_mesh_path: str
+    visual_mesh_path: str = field(converter=str)
+    col_mesh_path: str = field(converter=str)
     scale: float
 
     def get_viz_query(self):

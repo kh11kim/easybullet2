@@ -22,8 +22,9 @@ class Geometry(AbstractBody):
         cls, name:str, world:World, vis_id:int, col_id:int, 
         mass:float, shape:Shape):
         if name in world.bodies:
-            ic("Body name already exists. Recreate")
-            world.remove_body(name)
+            ic("Body name already exists.")
+            return world.bodies[name]
+            #world.remove_body(name)
 
         uid = world.createMultiBody(
             baseVisualShapeIndex=vis_id,
@@ -65,8 +66,9 @@ class URDF(AbstractBody):
         scale:float = 1.,
     ):
         if name in world.bodies:
-            ic("Body name already exists. Recreate")
-            world.remove_body(name)
+            ic("Body name already exists.")
+            return world.bodies[name]
+            #world.remove_body(name)
         
         uid = world.loadURDF(
             fileName=str(path),
