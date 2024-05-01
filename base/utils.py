@@ -57,3 +57,45 @@ def generate_temp_urdf(mesh: trimesh.Trimesh, tempdir: str):
     urdf_path = Path(tempdir) / "temp.urdf"
     tree.write(urdf_path, encoding="utf-8", xml_declaration=True)
     return urdf_path
+
+def generate_frame_urdf(tempdir,length=0.05, radius=0.005):
+    urdf_name = "frame"
+    root = ET.Element("robot", name=urdf_name)
+    base_link = ET.SubElement(root, "link", name="base")
+
+    def add_material(visual, color_name, rgba_str):
+        material = ET.SubElement(visual, "material", name=color_name)
+        ET.SubElement(material, "color", rgba=rgba_str)
+    def add_fixed_joint(name, parent_name, child_name, xyz_str="0 0 0", rpy_str="0 0 0"):
+        joint = ET.SubElement(root, "joint", name=name, type="fixed")
+        ET.SubElement(joint, "parent", link=parent_name)
+        ET.SubElement(joint, "child", link=child_name)
+        ET.SubElement(joint, "origin", rpy=rpy_str, xyz=xyz_str)
+        ET.SubElement(joint, "axis", xyz="0 0 0")
+    def add_axis_link(name, color_name, rgba_str, length=0.05, radius=0.005, ):
+        link = ET.SubElement(root, "link", name=name)
+        visual = ET.SubElement(link, "visual")
+        geometry = ET.SubElement(visual, "geometry")
+        ET.SubElement(geometry, "cylinder", length=f"{length}", radius=f"{radius}")
+        ET.SubElement(visual, "origin", xyz=f"0 0 {length/2}", rpy="0 0 0")
+        add_material(visual, color_name, rgba_str)
+    
+    visual = ET.SubElement(base_link, "visual")
+    geometry = ET.SubElement(visual, "geometry")
+    ET.SubElement(geometry, "sphere", radius="0.01")
+    ET.SubElement(visual, "origin", xyz="0 0 0", rpy="0 0 0")
+    add_material(visual, "white", "1 1 1 1")
+    add_axis_link("x_axis", "red", "1 0 0 1", length=length, radius=radius)
+    add_axis_link("y_axis", "green", "0 1 0 1", length=length, radius=radius)
+    add_axis_link("z_axis", "blue", "0 0 1 1", length=length, radius=radius)
+    add_fixed_joint("x_axis_joint", "base", "x_axis", rpy_str="0 1.5708 0", )
+    add_fixed_joint("y_axis_joint", "base", "y_axis", rpy_str="-1.5708 0 0", )
+    add_fixed_joint("z_axis_joint", "base", "z_axis", rpy_str="0 0 0", )
+    
+    urdf_path = Path(tempdir) / "frame.urdf"
+    tree = ET.ElementTree(root)
+    ET.indent(tree, '  ')
+    tree.write(urdf_path, encoding="utf-8", xml_declaration=True)
+    return urdf_path
+
+

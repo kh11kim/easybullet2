@@ -3,7 +3,7 @@ from attrs import define, field
 from numpy.typing import ArrayLike
 import abc
 from .world import World, AbstractBody
-from .body import Geometry, URDF
+from .body import Geometry
 from .pose import SE3
 from .data import *
 from .utils import generate_temp_urdf

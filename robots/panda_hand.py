@@ -12,6 +12,8 @@ class PandaHand(BodyContainer):
     @property
     def swept_vol(self): return self.bodies[1]
     @property
+    def tcp_sphere(self): return self.bodies[2]
+    @property
     def T_tcp_base(self): return SE3(trans=[0,0,-self.z_offset])
 
     def __attrs_post_init__(self):
@@ -21,8 +23,9 @@ class PandaHand(BodyContainer):
     def is_grasp_candidate(self, target_obj:AbstractBody):
         self.world.step(no_dynamics=True)
         is_col_gripper = self.hand.is_collision_with(target_obj)
-        is_in_swept_vol = self.swept_vol.is_collision_with(target_obj)
-        return is_in_swept_vol and not is_col_gripper
+        # is_in_swept_vol = self.swept_vol.is_collision_with(target_obj)
+        is_tcp_contained = self.tcp_sphere.is_collision_with(target_obj)
+        return is_tcp_contained and not is_col_gripper
 
     def is_grasped(self, target_obj:AbstractBody):
         base_col = any(self.world.get_distance_info(self.hand, target_obj, -1, -1))
@@ -46,6 +49,7 @@ class PandaHand(BodyContainer):
         q_target = np.zeros(2)
         timesteps = int(duration / self.world.dt)
         self.swept_vol.set_pose(SE3(trans=[0,0,-10]))
+        self.tcp_sphere.set_pose(SE3(trans=[0,0,-10]))
         for _ in range(timesteps):
             self.hand.set_ctrl_target_joint_angles(q_target)
             self.world.step()
@@ -65,5 +69,10 @@ class PandaHand(BodyContainer):
             world=world, 
             half_extents=box_half_extents, 
             rgba=(0, 1, 0, 0.4))
+        tcp_sphere = Sphere.create(
+            name=f"{name}_tcp_sphere", 
+            world=world, 
+            radius=0.005, rgba=[1,0,0,0.5])
         swept_vol.set_pose(SE3(trans=[0,0,0.105]))
-        return cls.from_bodies(name, [hand, swept_vol])
+        tcp_sphere.set_pose(SE3(trans=[0,0,0.105]))
+        return cls.from_bodies(name, [hand, swept_vol, tcp_sphere])

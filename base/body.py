@@ -7,7 +7,7 @@ from icecream import ic
 from .world import World, AbstractBody
 from .pose import SE3, SO3
 from .data import *
-from .utils import generate_temp_urdf
+from .utils import generate_temp_urdf, generate_frame_urdf
 from contextlib import contextmanager
 import trimesh
 
@@ -182,7 +182,7 @@ class URDF(AbstractBody):
                 solved = True
                 break
             
-            pose_sol = self.forward_kinematics(ik_sol)
+            pose_sol = self.forward_kinematics(ik_sol, link_idx)
             if np.allclose(pose_sol.trans, target_pose.trans, atol=pos_tol):
                 solved = True
                 break
@@ -211,3 +211,12 @@ class URDF(AbstractBody):
         )
         return np.vstack([jac_trans, jac_rot])
     
+class Frame(URDF):
+    @classmethod
+    def create(cls, name, world, 
+        length=0.05, radius=0.005):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tempdir:
+            urdf_path = generate_frame_urdf(tempdir, length, radius)
+            frame = super().create(name, world, urdf_path, fixed=True)
+        return frame
