@@ -172,21 +172,24 @@ class URDF(AbstractBody):
     
     def inverse_kinematics(
         self, target_pose:SE3, link_idx:int, 
-        validate=True, max_iter=10, pos_tol=1e-3):
-        
+        validate=True, max_iter=10, pos_tol=1e-3
+    ):
         solved = False
-        for _ in range(max_iter):    
-            ik_sol = self.world.calculateInverseKinematics(
-                self.uid, link_idx, target_pose.trans, target_pose.rot.as_quat())
-            if not validate: 
-                solved = True
-                break
-            
-            pose_sol = self.forward_kinematics(ik_sol, link_idx)
-            if np.allclose(pose_sol.trans, target_pose.trans, atol=pos_tol):
-                solved = True
-                break
-        return ik_sol if solved else None
+        q = self.get_joint_angles()
+        with self.set_joint_angles_context(q):
+            for _ in range(max_iter):    
+                ik_sol = self.world.calculateInverseKinematics(
+                    self.uid, link_idx, target_pose.trans, target_pose.rot.as_quat())
+                self.set_joint_angles(ik_sol) # update initial joint angles to ik solution
+                if not validate: 
+                    solved = True
+                    break
+                
+                pose_sol = self.forward_kinematics(ik_sol, link_idx)
+                if np.linalg.norm(pose_sol.trans-target_pose.trans) < pos_tol:
+                    solved = True
+                    break
+        return np.array(ik_sol) if solved else None
     
     def set_ctrl_target_joint_angles(self, q):
         assert len(q) == len(self.movable_joints)
