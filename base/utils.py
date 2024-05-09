@@ -1,7 +1,9 @@
 import sys, os
+import numpy as np
 import trimesh
 import xml.etree.cElementTree as ET
 from pathlib import Path
+from typing import *
 from tempfile import TemporaryDirectory
 
 class HideOutput:
@@ -26,13 +28,16 @@ class HideOutput:
         os.dup2(self._oldstdout_fno, 1)
 
 
-def generate_temp_urdf(mesh: trimesh.Trimesh, tempdir: str):
+def generate_temp_urdf(mesh: trimesh.Trimesh, tempdir: str, rgba: List[int]=[1, 1, 1, 1]):
     mesh_path = Path(tempdir) / "mesh.obj"
     if mesh_path.exists():
         mesh_path.unlink()
     mesh.export(mesh_path, "obj")
     mesh_offset = - mesh.centroid
-    offset_str = str(mesh_offset.round(3)).replace("[", "").replace("]", "")
+    
+    ndarray_to_str = lambda x: str(x.round(3)).replace("[", "").replace("]", "")
+    offset_str = ndarray_to_str(mesh_offset)
+    color_str = ndarray_to_str(np.array(rgba))
     
     urdf_name = "temp"
     root = ET.Element("robot", name=urdf_name+".urdf")
@@ -49,8 +54,8 @@ def generate_temp_urdf(mesh: trimesh.Trimesh, tempdir: str):
         geometry = ET.SubElement(element, "geometry")
         geometry_mesh = ET.SubElement(geometry, "mesh",
             filename="mesh.obj", scale="1 1 1")
-    material = ET.SubElement(visual, "material", name="white")
-    ET.SubElement(material, "color", rgba="1 1 1 1")
+    material = ET.SubElement(visual, "material", name="color")
+    ET.SubElement(material, "color", rgba=color_str)
 
     tree = ET.ElementTree(root)
     ET.indent(tree, '  ')

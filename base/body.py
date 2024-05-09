@@ -97,10 +97,10 @@ class URDF(AbstractBody):
         return body
     
     @classmethod
-    def from_trimesh(cls, name:str, world:World, mesh:trimesh.Trimesh, fixed:bool):
+    def from_trimesh(cls, name:str, world:World, mesh:trimesh.Trimesh, fixed:bool, rgba=[1,1,1,1]):
         import tempfile
         with tempfile.TemporaryDirectory() as tempdir:
-            urdf_path = generate_temp_urdf(mesh, tempdir)
+            urdf_path = generate_temp_urdf(mesh, tempdir, rgba)
             obj = cls.create(
                 name, world, 
                 urdf_path, fixed=fixed, scale=1.)
