@@ -1,5 +1,6 @@
 from attrs import define, field
 from ..base import *
+from ..assets import PANDA_HAND_URDF
 
 @define
 class PandaHand(BodyContainer):
@@ -23,9 +24,9 @@ class PandaHand(BodyContainer):
     def is_grasp_candidate(self, target_obj:AbstractBody):
         self.world.step(no_dynamics=True)
         is_col_gripper = self.hand.is_collision_with(target_obj)
-        # is_in_swept_vol = self.swept_vol.is_collision_with(target_obj)
-        is_tcp_contained = self.tcp_sphere.is_collision_with(target_obj)
-        return is_tcp_contained and not is_col_gripper
+        is_in_swept_vol = self.swept_vol.is_collision_with(target_obj)
+        # is_tcp_contained = self.tcp_sphere.is_collision_with(target_obj)
+        return is_in_swept_vol and not is_col_gripper
 
     def is_grasped(self, target_obj:AbstractBody):
         base_col = any(self.world.get_distance_info(self.hand, target_obj, -1, -1))
@@ -61,8 +62,8 @@ class PandaHand(BodyContainer):
         if name in world.bodies:
             ic("Body name already exists.")
             return world.bodies[name]
-        hand_urdf_path = Path("../assets/panda/hand.urdf")
-        hand = URDF.create(name, world, hand_urdf_path, fixed=True)
+        
+        hand = URDF.create(name, world, PANDA_HAND_URDF, fixed=True)
         box_half_extents = [0.0085, 0.04, 0.0085]
         swept_vol = Box.create(
             name=f"{name}_swept_vol", 

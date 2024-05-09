@@ -42,7 +42,6 @@ class World(BulletClient):
             if 'no_gui' not in cls.worlds:
                 cls.worlds['no_gui'] = []
             cls.worlds['no_gui'].append(world)
-            
         return world
     
     def __init__(
@@ -51,6 +50,8 @@ class World(BulletClient):
         dt=0.001, 
         vis_delay=0.05, 
     ):
+        if hasattr(self, "_init"): return #preventing multiple initialization
+
         self.gui = gui
         self.dt = dt
         self.vis_delay = vis_delay #visualization delay
@@ -70,6 +71,7 @@ class World(BulletClient):
         
         self.set_gravity()
         self.watch_workspace()
+        self._init = True
 
     @contextmanager
     def no_rendering(self):
