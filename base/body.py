@@ -126,12 +126,12 @@ class URDF(AbstractBody):
         self.set_joint_angles(joints_temp)
     
     def set_pose(self, pose):
-        """ This is because, simple setting pose is setting a pose of base inertia frame.
+        """ This is because, simply setting pose is setting a pose of base inertia frame.
         This differs from initial load state of the URDF."""
         super().set_pose(pose @ self.offset)
     
     def get_pose(self):
-        return self.offset.inverse() @ super().get_pose()
+        return super().get_pose() @ self.offset.inverse()
     
     def get_joint_states(self):
         return [JointState(*s) 
