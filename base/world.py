@@ -145,6 +145,55 @@ class World(BulletClient):
             self.removeBody(body.uid)
         del self.bodies[body.name]
     
+    def remove_all_debugitems(self):
+        self.removeAllUserDebugItems()
+    
+    def remove_debug_item(self, name):
+        self.removeUserDebugItem(self.debug_items[name])
+
+    def add_debug_line(self, p_from, p_to, color=[1,0,0], name=None):
+        """ if name is not None, debug uid is tracked in self.debug_items"""
+        uid = self.addUserDebugLine(
+            lineFromXYZ=p_from, 
+            lineToXYZ=p_to, 
+            lineColorRGB=color
+        )
+
+        if name is not None:
+            if name in self.debug_items:
+                self.remove_debug_item(name)
+            self.debug_items[name] = uid
+    
+    def draw_workspace(self, workspace_size):
+        half_ws_size = workspace_size/2
+        point_from = [
+            [half_ws_size, half_ws_size, 0],
+            [-half_ws_size, half_ws_size, 0],
+            [-half_ws_size, -half_ws_size, 0],
+            [half_ws_size, -half_ws_size, 0],
+            [half_ws_size, half_ws_size, workspace_size],
+            [-half_ws_size, half_ws_size, workspace_size],
+            [-half_ws_size, -half_ws_size, workspace_size],
+            [half_ws_size, -half_ws_size, workspace_size],
+        ]
+        point_to = [
+            [half_ws_size, half_ws_size, workspace_size],
+            [-half_ws_size, half_ws_size, workspace_size],
+            [-half_ws_size, -half_ws_size, workspace_size],
+            [half_ws_size, -half_ws_size, workspace_size],
+            [-half_ws_size, half_ws_size, workspace_size],
+            [-half_ws_size, -half_ws_size, workspace_size],
+            [half_ws_size, -half_ws_size, workspace_size],
+            [half_ws_size, half_ws_size, workspace_size],
+        ]
+        for p1, p2 in zip(point_from, point_to):
+            self.add_debug_line(
+                p1, p2, color=[0.5, 0.5, 0.5]
+            )
+    
+    
+
+
     def get_distance_info(
         self, 
         body1:AbstractBody, 
@@ -153,7 +202,6 @@ class World(BulletClient):
         link2:int=None,
         tol:float=0.,
     ):
-        """world.step(no_dynamics=True) should be called before using"""
         kwargs = dict()
         kwargs["bodyA"] = body1.uid
         kwargs["bodyB"] = body2.uid
@@ -163,20 +211,44 @@ class World(BulletClient):
         results = self.getClosestPoints(**kwargs)
         return [DistanceInfo(*info) for info in results]
     
-    def wait_for_rest(self, timeout=2.0, polling_dt= 0.1, tol=0.01):
+    def get_contact_info(
+        self,
+        body1:AbstractBody, 
+        body2:AbstractBody = None, 
+        link1:int=None, 
+        link2:int=None,
+    ):
+        """world.step(no_dynamics=True) should be called before using"""
+        kwargs = dict()
+        kwargs["bodyA"] = body1.uid
+        if body2 is not None: kwargs["bodyB"] = body2.uid
+        if link1 is not None: kwargs['linkIndexA'] = link1
+        if link2 is not None: kwargs['linkIndexB'] = link2
+        results = self.getContactPoints(**kwargs)
+        return [ContactInfo(*info) for info in results]
+    
+    def wait_for_rest(self, wait_time=0.1, timeout=5.0, polling_dt= 0.1, tol=0.01, wait_until_stalled=False):
         timesteps = int(timeout / polling_dt)
-        polling_steps = int(1 / polling_dt)
-        for _ in range(timesteps):
+        polling_steps = int(polling_dt / self.dt)
+        for i in range(int(wait_time/self.dt)): self.step()
+
+        t = 0.
+        timeover=False
+        while True:
             for _ in range(polling_steps):
-                self.step()
+                self.step()    
+            t += polling_dt
             
             chk_bodies_rest = [
                 np.linalg.norm(body.get_velocity()) < tol
                 for body in self.bodies.values()
             ]
-            if all(chk_bodies_rest):
-                return True
-        return False
+            if wait_until_stalled == False and t >= timeout:
+                timeover = True
+            
+            if all(chk_bodies_rest) or timeover:
+                break
+        return
 
     def make_fixed_constraint(self):
         raise NotImplementedError("haha")
@@ -228,6 +300,10 @@ class AbstractBody(abc.ABC):
         lower, upper = np.array(lower), np.array(upper)
         return lower, upper
     
+    def change_color(self, rgba, link_idx=-1):
+        self.world.changeVisualShape(
+            bodyUniqueId=self.uid, linkIndex=link_idx, rgbaColor=rgba)
+
     def __repr__(self):
         return f"{self.__class__.__name__}:{self.name}"
         

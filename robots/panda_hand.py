@@ -46,12 +46,13 @@ class PandaHand(BodyContainer):
         self.set_pose(pose)
         self.hand.set_joint_angles([width/2,  width/2])
 
-    def grasp(self, duration=0.5):
+    def grasp(self, duration=0.5, force=50):
         q_target = np.zeros(2)
         timesteps = int(duration / self.world.dt)
         self.swept_vol.set_pose(SE3(trans=[0,0,-10]))
         self.tcp_sphere.set_pose(SE3(trans=[0,0,-10]))
         for _ in range(timesteps):
+            self.hand.max_torque = [force] * 2
             self.hand.set_ctrl_target_joint_angles(q_target)
             self.world.step()
 
@@ -70,10 +71,10 @@ class PandaHand(BodyContainer):
             world=world, 
             half_extents=box_half_extents, 
             rgba=(0, 1, 0, 0.4))
-        tcp_sphere = Sphere.create(
-            name=f"{name}_tcp_sphere", 
-            world=world, 
-            radius=0.005, rgba=[1,0,0,0.5])
+        # tcp_sphere = Sphere.create(
+        #     name=f"{name}_tcp_sphere", 
+        #     world=world, 
+        #     radius=0.005, rgba=[1,0,0,0.5])
         swept_vol.set_pose(SE3(trans=[0,0,0.105]))
-        tcp_sphere.set_pose(SE3(trans=[0,0,0.105]))
-        return cls.from_bodies(name, [hand, swept_vol, tcp_sphere])
+        # tcp_sphere.set_pose(SE3(trans=[0,0,0.105]))
+        return cls.from_bodies(name, [hand, swept_vol]) #tcp_sphere

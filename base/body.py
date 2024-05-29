@@ -69,11 +69,13 @@ class URDF(AbstractBody):
             ic("Body name already exists.")
             return world.bodies[name]
             #world.remove_body(name)
-        
+        #flags = p.URDF_USE_INERTIA_FROM_FILE if mass is not None else 0
         uid = world.loadURDF(
             fileName=str(path),
             useFixedBase=fixed,
-            globalScaling=scale)
+            globalScaling=scale,
+            #flags=flags,
+        )
         dof = world.getNumJoints(uid)
         
         joint_info = []
