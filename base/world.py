@@ -164,9 +164,9 @@ class World(BulletClient):
                 self.remove_debug_item(name)
             self.debug_items[name] = uid
     
-    def draw_workspace(self, workspace_size):
+    def draw_workspace(self, workspace_size, workspace_center_bottom=np.zeros(3)):
         half_ws_size = workspace_size/2
-        point_from = [
+        point_from = np.array([
             [half_ws_size, half_ws_size, 0],
             [-half_ws_size, half_ws_size, 0],
             [-half_ws_size, -half_ws_size, 0],
@@ -175,8 +175,8 @@ class World(BulletClient):
             [-half_ws_size, half_ws_size, workspace_size],
             [-half_ws_size, -half_ws_size, workspace_size],
             [half_ws_size, -half_ws_size, workspace_size],
-        ]
-        point_to = [
+        ])
+        point_to = np.array([
             [half_ws_size, half_ws_size, workspace_size],
             [-half_ws_size, half_ws_size, workspace_size],
             [-half_ws_size, -half_ws_size, workspace_size],
@@ -185,14 +185,16 @@ class World(BulletClient):
             [-half_ws_size, -half_ws_size, workspace_size],
             [half_ws_size, -half_ws_size, workspace_size],
             [half_ws_size, half_ws_size, workspace_size],
-        ]
+        ])
+        point_from += workspace_center_bottom
+        point_to += workspace_center_bottom
         for p1, p2 in zip(point_from, point_to):
             self.add_debug_line(
                 p1, p2, color=[0.5, 0.5, 0.5]
             )
     
-    
-
+    def save_state(self): self.world_state_uid = self.saveState()
+    def restore_state(self): return self.restoreState(self.world_state_uid)
 
     def get_distance_info(
         self, 
@@ -227,26 +229,25 @@ class World(BulletClient):
         results = self.getContactPoints(**kwargs)
         return [ContactInfo(*info) for info in results]
     
-    def wait_for_rest(self, wait_time=0.1, timeout=5.0, polling_dt= 0.1, tol=0.01, wait_until_stalled=False):
-        timesteps = int(timeout / polling_dt)
-        polling_steps = int(polling_dt / self.dt)
-        for i in range(int(wait_time/self.dt)): self.step()
+    def wait_to_stablize(self, wait_time=0.1, timeout=5.0, tol=0.01, polling_period=100): # polling_dt= 0.1, 
+        #timesteps = int(timeout / polling_dt)
+        # initial wait
+        #polling_steps = int(polling_dt / self.dt)
+        for i in range(int(wait_time/self.dt)): 
+            self.step()
 
         t = 0.
-        timeover=False
-        while True:
-            for _ in range(polling_steps):
-                self.step()    
-            t += polling_dt
-            
-            chk_bodies_rest = [
+        while t < timeout:
+            for _ in range(polling_period): # t += polling_dt
+                self.step()
+            t += self.dt * polling_period
+
+            chk_all_bodies_rest = all([
                 np.linalg.norm(body.get_velocity()) < tol
                 for body in self.bodies.values()
-            ]
-            if wait_until_stalled == False and t >= timeout:
-                timeover = True
+            ])
             
-            if all(chk_bodies_rest) or timeover:
+            if chk_all_bodies_rest:
                 break
         return
 

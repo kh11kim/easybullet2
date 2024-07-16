@@ -61,7 +61,7 @@ class Box(Geometry):
         world:World,
         half_extents:ArrayLike,
         mass:float=0.5,
-        rgba:Tuple[float]=(1, 0, 0, 1),
+        rgba:Tuple[float]=(1, 1, 1, 1),
         ghost:bool=False
     ):
         shape = BoxShape(rgba=rgba, ghost=ghost, half_extents=half_extents)

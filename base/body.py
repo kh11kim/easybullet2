@@ -54,6 +54,7 @@ class URDF(AbstractBody):
 
     def __attrs_post_init__(self):
         self.offset = super().get_pose()
+        self.set_joint_angles(self.neutral)
 
     @classmethod
     def create(
