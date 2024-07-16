@@ -50,10 +50,10 @@ class URDF(AbstractBody):
     pos_ctrl_gain_p: List[float]
     pos_ctrl_gain_d: List[float]
     max_torque: List[float]
-    offset: SE3 = field(init=False)
+    T_com: SE3 = field(init=False)
 
     def __attrs_post_init__(self):
-        self.offset = super().get_pose()
+        self.T_com = super().get_pose()
         self.set_joint_angles(self.neutral)
 
     @classmethod
@@ -62,7 +62,7 @@ class URDF(AbstractBody):
         name,
         world:World,
         path:Path|str,
-        mass:float=0.5,
+        #mass:float=0.5,
         fixed:bool = True,
         scale:float = 1.,
     ):
@@ -90,7 +90,7 @@ class URDF(AbstractBody):
         pos_ctrl_gain_p = [0.01] * len(movable_joints)
         pos_ctrl_gain_d = [1.0] * len(movable_joints)
         max_torque = [250] * len(movable_joints)
-        
+        mass = None
         body = cls(
             world, uid, name, mass,
             path, fixed, scale, dof, joint_info, movable_joints,
@@ -129,12 +129,12 @@ class URDF(AbstractBody):
         self.set_joint_angles(joints_temp)
     
     def set_pose(self, pose):
-        """ This is because, simply setting pose is setting a pose of base inertia frame.
+        """ This is because, simply setting pose is setting a pose of base inertia frame(CoM).
         This differs from initial load state of the URDF."""
-        super().set_pose(pose @ self.offset)
+        super().set_pose(pose @ self.T_com)
     
     def get_pose(self):
-        return super().get_pose() @ self.offset.inverse()
+        return super().get_pose() @ self.T_com.inverse()
     
     def get_joint_states(self):
         return [JointState(*s) 

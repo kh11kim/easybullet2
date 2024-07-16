@@ -6,31 +6,38 @@ from ..assets import PANDA_HAND_URDF
 class PandaHand(BodyContainer):
     max_width = 0.08
     z_offset = 0.105
-    grasping_box: Box = field(init=False)
+    # grasping_box: Box = field(init=False)
+    # no_swept_vol: bool = field(init=False)
 
     @property
-    def hand(self)->URDF: return self.bodies[0]
+    def hand_body(self)->URDF: return self.bodies[0]
+    @property 
+    def is_swept_vol(self): len(self.bodies) == 2
     @property
-    def swept_vol(self): return self.bodies[1]
+    def swept_vol(self): 
+        assert self.is_swept_vol
+        return self.bodies[1]
     @property
     def tcp_sphere(self): return self.bodies[2]
     @property
     def T_tcp_base(self): return SE3(trans=[0,0,-self.z_offset])
+    @property
+    def T_base(self): return super().get_pose()
 
     def __attrs_post_init__(self):
         self.reset()
         super().__attrs_post_init__()
 
     def is_grasp_candidate(self, target_obj:AbstractBody):
+        assert self.is_swept_vol
         self.world.step(no_dynamics=True)
-        is_col_gripper = self.hand.is_collision_with(target_obj)
+        is_col_gripper = self.hand_body.is_collision_with(target_obj)
         is_in_swept_vol = self.swept_vol.is_collision_with(target_obj)
-        # is_tcp_contained = self.tcp_sphere.is_collision_with(target_obj)
         return is_in_swept_vol and not is_col_gripper
 
     def is_grasped(self, target_obj:AbstractBody):
-        base_col = any(self.world.get_distance_info(self.hand, target_obj, -1, -1))
-        col = self.hand.is_collision_with(target_obj)
+        base_col = any(self.world.get_distance_info(self.hand_body, target_obj, -1, -1))
+        col = self.hand_body.is_collision_with(target_obj)
         return not base_col and col
     
     def set_pose(self, pose:SE3):
@@ -41,40 +48,135 @@ class PandaHand(BodyContainer):
         base_pose = super().get_pose()
         return base_pose @ self.T_tcp_base.inverse()
     
+    def get_width(self):
+        return np.sum(self.hand_body.get_joint_angles())
+    
     def reset(self, pose=SE3(), width=None):
-        if width is None: width = self.max_width
+        if width is None: 
+            width = self.max_width
         self.set_pose(pose)
-        self.hand.set_joint_angles([width/2,  width/2])
+        self.hand_body.set_joint_angles([width/2,  width/2])
 
     def grasp(self, duration=0.5, force=50):
         q_target = np.zeros(2)
         timesteps = int(duration / self.world.dt)
-        self.swept_vol.set_pose(SE3(trans=[0,0,-10]))
-        self.tcp_sphere.set_pose(SE3(trans=[0,0,-10]))
+        if self.is_swept_vol:
+            self.swept_vol.set_pose(SE3(trans=[0,0,-10]))
+        
         for _ in range(timesteps):
-            self.hand.max_torque = [force] * 2
-            self.hand.set_ctrl_target_joint_angles(q_target)
+            self.hand_body.max_torque = [force] * 2
+            self.hand_body.set_ctrl_target_joint_angles(q_target)
             self.world.step()
 
-    
-
     @classmethod
-    def create(cls, name:str, world:World):
+    def create(cls, name:str, world:World, fixed:bool, grasping_vol:bool=True):
         if name in world.bodies:
             ic("Body name already exists.")
             return world.bodies[name]
         
-        hand = URDF.create(name, world, PANDA_HAND_URDF, fixed=True)
-        box_half_extents = [0.0085, 0.04, 0.0085]
-        swept_vol = Box.create(
-            name=f"{name}_swept_vol", 
-            world=world, 
-            half_extents=box_half_extents, 
-            rgba=(0, 1, 0, 0.4))
-        # tcp_sphere = Sphere.create(
-        #     name=f"{name}_tcp_sphere", 
-        #     world=world, 
-        #     radius=0.005, rgba=[1,0,0,0.5])
-        swept_vol.set_pose(SE3(trans=[0,0,0.105]))
-        # tcp_sphere.set_pose(SE3(trans=[0,0,0.105]))
-        return cls.from_bodies(name, [hand, swept_vol]) #tcp_sphere
+        bodies = []
+        hand = URDF.create(name, world, PANDA_HAND_URDF, fixed=fixed)
+        bodies.append(hand)
+        if grasping_vol:
+            box_half_extents = [0.0085, 0.04, 0.0085]
+            swept_vol = Box.create(
+                name=f"{name}_swept_vol", 
+                world=world, 
+                half_extents=box_half_extents, 
+                rgba=(0, 1, 0, 0.4))
+            swept_vol.set_pose(SE3(trans=[0,0,0.105]))
+            bodies.append(swept_vol)
+
+        finger_constr_info = ConstraintInfo(
+            hand.uid, 0,
+            hand.uid, 1,
+            p.JOINT_GEAR, [1,0,0],
+            (0.,0.,0.), (0.,0.,0.,1.),
+            (0.,0.,0.), (0.,0.,0.,1.)
+        )
+        world.create_constraint("finger_constr", finger_constr_info)
+        world.change_constraint("finger_constr", **{"gearRatio":-1, "erp":0.1, "maxForce":50})
+        
+        return cls.from_bodies(name, bodies)
+
+
+#@define
+class PandaHandUtil:
+    def __init__(self, world:World):
+        self.world = world
+    
+    def update_tcp_constraint(self, pose):
+        T_body = pose @ self.hand.T_tcp_base @ self.hand.hand_body.T_com
+        self.world.change_constraint(
+            "hand_pose_constr",
+            jointChildPivot=T_body.trans,
+            jointChildFrameOrientation=T_body.rot.as_quat(),
+            maxForce=1000,
+        )
+
+    def reset(self, pose=SE3(), width=None):
+        self.hand = PandaHand.create(
+            "hand", 
+            self.world, 
+            fixed=False,
+            grasping_vol=False
+        )
+        if width is None:
+            width = self.hand.max_width
+        self.hand.reset(pose, width)
+
+        pose_constr_info = ConstraintInfo(
+            self.hand.hand_body.uid, None,
+            None, None,
+            p.JOINT_FIXED, [0,0,0],
+            (0.,0.,0.), (0.,0.,0.,1.),
+            self.hand.T_base.trans, self.hand.T_base.rot.as_quat()
+        )
+        self.world.create_constraint("hand_pose_constr", pose_constr_info)
+        self.update_tcp_constraint(pose)
+
+    def move_xyz(self, target_pose:SE3, xyz_step=0.001, vel=0.1, abort_on_contact=True):
+        curr_pose = self.hand.get_pose()
+        self.update_tcp_constraint(curr_pose)
+        
+        diff = target_pose.trans - curr_pose.trans
+        n_steps = int(np.linalg.norm(diff) / xyz_step)
+        dist_step = diff / n_steps
+        dur_step = np.linalg.norm(dist_step) / vel
+
+        for _ in range(n_steps):
+            curr_pose.trans += dist_step
+            self.update_tcp_constraint(curr_pose)
+            for _ in range(int(dur_step / self.world.dt)):
+                self.world.step()
+            if abort_on_contact and self.hand.is_in_collision():
+                return
+        for _ in range(int(dur_step / self.world.dt)):
+            self.world.step()
+    
+    def remove(self):
+        self.world.remove_constraint("hand_pose_constr")
+        if self.hand is not None:
+            self.world.remove_body(self.hand)
+            self.hand = None
+    
+    def execute_grasp(self, grasp_pose:SE3, allow_contact=False):
+        pre_grasp_pose = grasp_pose @ SE3(trans=[0,0,-0.1])
+        post_grasp_pose = SE3(trans=[0,0,0.2]) @ grasp_pose
+
+        is_success = False
+        self.reset(pre_grasp_pose)
+        if self.hand.is_in_collision():
+            return is_success
+        self.move_xyz(grasp_pose)
+        if self.hand.is_in_collision() and not allow_contact:
+            return is_success
+        
+        self.hand.grasp(duration=1.)
+        self.move_xyz(post_grasp_pose, abort_on_contact=False)
+        is_contact = self.hand.is_in_collision()
+        is_width_not_zero = self.hand.get_width() > 0.1 * self.hand.max_width
+        is_success = is_contact and is_width_not_zero
+        self.remove()
+        return is_success
+

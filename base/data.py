@@ -86,7 +86,20 @@ class DynamicsInfo:
     contact_stiffness: float
     body_type: int
     collision_margin: float
-    
+
+@define
+class ConstraintInfo:
+    parent_body: int
+    parent_link: int
+    child_body: int
+    child_link: int
+    constr_type: int
+    joint_axis: Tuple[float]
+    parent_frame_pos: Tuple[float]
+    parent_frame_orn: Tuple[float]
+    child_frame_pos: Tuple[float]
+    child_frame_orn: Tuple[float]
+
 @define(frozen=True)
 class Shape(abc.ABC):
     rgba: Tuple = field(converter=tuple)

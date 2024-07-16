@@ -47,19 +47,21 @@ class World(BulletClient):
     def __init__(
         self, 
         gui=True, 
-        dt=0.001, 
-        vis_delay=0.05, 
+        z_gravity=-9.81,
+        dt=0.005,
+        solver_iter=150,
+        realtime=True,
+        realtime_factor=0.5, 
     ):
         if hasattr(self, "_init"): return #preventing multiple initialization
 
         self.gui = gui
         self.dt = dt
-        self.vis_delay = vis_delay #visualization delay
-        self.t = 0.
-        self.bodies:Dict[str, AbstractBody] = dict()
-        self.shapes:Dict[str, Shape] = dict()
-        self.debug_items: Dict[str, int] = dict()
-        
+        self.solver_iter = solver_iter
+        self.realtime = realtime
+        self.realtime_factor = realtime_factor
+        self.gravity = z_gravity
+
         if gui == True:
             if self.gui_world_exists: return 
             else: self.gui_world_exists = True
@@ -101,7 +103,20 @@ class World(BulletClient):
     
     def set_gravity(self, force_z=-9.81):
         self.setGravity(0, 0, force_z)
-        
+    
+    def reset(self):
+        self.resetSimulation()
+        self.setPhysicsEngineParameter(
+            fixedTimeStep=self.dt,
+            numSolverIterations=self.solver_iter
+        )
+        self.t = 0.
+        self.bodies:Dict[str, AbstractBody] = dict()
+        self.shapes:Dict[str, Shape] = dict()
+        self.debug_items: Dict[str, int] = dict()
+        self.constr: Dict[str, int] = dict()
+        self.set_gravity(self.gravity)
+
     def step(self, no_dynamics=False):
         if no_dynamics:
             self.performCollisionDetection()
@@ -109,8 +124,10 @@ class World(BulletClient):
             self.stepSimulation()
         
         # add delay for realtime visualization
-        if self.vis_delay != 0. and int(self.t / self.dt) % (1/self.vis_delay) == 0:
-            time.sleep(self.vis_delay/3) 
+        if self.gui and self.realtime:
+            time.sleep(self.dt*self.realtime_factor)    
+        # if self.vis_delay != 0. and int(self.t / self.dt) % (1/self.vis_delay) == 0:
+        #     time.sleep(self.vis_delay/3) 
         self.t += self.dt
         
     def show(self):
@@ -193,8 +210,8 @@ class World(BulletClient):
                 p1, p2, color=[0.5, 0.5, 0.5]
             )
     
-    def save_state(self): self.world_state_uid = self.saveState()
-    def restore_state(self): return self.restoreState(self.world_state_uid)
+    def save_state(self): return self.saveState()
+    def restore_state(self, state_uid): return self.restoreState(state_uid)
 
     def get_distance_info(
         self, 
@@ -250,7 +267,37 @@ class World(BulletClient):
             if chk_all_bodies_rest:
                 break
         return
+    def create_constraint(self, name, constr_info:ConstraintInfo):
+        if name in self.constr:
+            # constraint exists already
+            return
+        if constr_info.parent_link is None:
+            constr_info.parent_link = -1
+        if constr_info.child_body is None:
+            constr_info.child_body = -1
+        if constr_info.child_link is None:
+            constr_info.child_link = -1
+        
+        self.constr[name] = self.createConstraint(
+            parentBodyUniqueId=constr_info.parent_body,
+            parentLinkIndex=constr_info.parent_link,
+            childBodyUniqueId=constr_info.child_body,
+            childLinkIndex=constr_info.child_link,
+            jointType=constr_info.constr_type,
+            jointAxis=constr_info.joint_axis,
+            parentFramePosition=constr_info.parent_frame_pos,
+            parentFrameOrientation=constr_info.parent_frame_orn,
+            childFramePosition=constr_info.child_frame_pos,
+            childFrameOrientation=constr_info.child_frame_orn,
+        )
 
+    def change_constraint(self, name, **kwargs):
+        self.changeConstraint(self.constr[name], **kwargs)
+
+    def remove_constraint(self, name):
+        self.removeConstraint(self.constr[name])
+        del self.constr[name]
+        
     def make_fixed_constraint(self):
         raise NotImplementedError("haha")
 
@@ -280,9 +327,18 @@ class AbstractBody(abc.ABC):
         return any(distance_info)
     
     def is_in_collision(self):
-        for body in self.world.bodies.values():
-            if body is self: continue
-            if self.is_collision_with(body): return True
+        for other in self.world.bodies.values():
+            if other is self: continue
+            
+            if isinstance(other, BodyContainer):
+                for _other in other.bodies:
+                    if self is _other: continue
+                    if self.is_collision_with(_other):
+                        return True
+            
+            else:
+                if self.is_collision_with(other):
+                    return True
         return False
 
     def get_dynamics_info(self, link_idx=-1):
@@ -342,6 +398,15 @@ class BodyContainer:
     
     def get_velocity(self):
         return self.bodies[0].get_velocity()
+    
+    def is_in_collision(self):
+        for other in self.world.bodies.values():
+            if self is other: continue
+            
+            for body in self.bodies:
+                if body.is_in_collision(): 
+                    return True    
+        return False
         
 if __name__ == "__main__":
     world = World()
