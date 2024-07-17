@@ -71,7 +71,7 @@ class World(BulletClient):
         if self.gui:
             self.pause_button_uid = p.addUserDebugParameter("turn off loop",1,0,1)
         
-        self.set_gravity()
+        self.reset()
         self.watch_workspace()
         self._init = True
 
@@ -113,8 +113,9 @@ class World(BulletClient):
         self.t = 0.
         self.bodies:Dict[str, AbstractBody] = dict()
         self.shapes:Dict[str, Shape] = dict()
-        self.debug_items: Dict[str, int] = dict()
-        self.constr: Dict[str, int] = dict()
+        self.ghosts: Dict[str, AbstractBody] = dict()
+        self.debug_items: Dict[str, int] = dict() # not wrapped by class
+        self.constr: Dict[str, int] = dict() # not wrapped by class
         self.set_gravity(self.gravity)
 
     def step(self, no_dynamics=False):
@@ -126,8 +127,6 @@ class World(BulletClient):
         # add delay for realtime visualization
         if self.gui and self.realtime:
             time.sleep(self.dt*self.realtime_factor)    
-        # if self.vis_delay != 0. and int(self.t / self.dt) % (1/self.vis_delay) == 0:
-        #     time.sleep(self.vis_delay/3) 
         self.t += self.dt
         
     def show(self):
@@ -152,15 +151,22 @@ class World(BulletClient):
         self.shapes[shape] = (viz_id, col_id)
         return self.shapes[shape]
 
-    def remove_body(self, body: str | AbstractBody):
-        if isinstance(body, BodyContainer):
-            for b in body.bodies:
-                self.removeBody(b.uid) # delete all contained bodies
-        else: 
+    def remove_body(self, body: str | AbstractBody | BodyContainer):
+        def _remove_body(body: str | AbstractBody | BodyContainer, body_dict:Dict[str, AbstractBody]):
             if isinstance(body, str):
-                body = self.bodies[body]
-            self.removeBody(body.uid)
-        del self.bodies[body.name]
+                body = body_dict[body]
+            
+            if isinstance(body, BodyContainer):
+                for b in body.bodies:
+                    self.removeBody(b.uid) # delete all contained bodies
+            elif isinstance(body, AbstractBody): 
+                self.removeBody(body.uid)
+            del body_dict[body.name]
+
+        if body.ghost:
+            _remove_body(body, self.ghosts)
+        else:
+            _remove_body(body, self.bodies)
     
     def remove_all_debugitems(self):
         self.removeAllUserDebugItems()
@@ -246,16 +252,13 @@ class World(BulletClient):
         results = self.getContactPoints(**kwargs)
         return [ContactInfo(*info) for info in results]
     
-    def wait_to_stablize(self, wait_time=0.1, timeout=5.0, tol=0.01, polling_period=100): # polling_dt= 0.1, 
-        #timesteps = int(timeout / polling_dt)
-        # initial wait
-        #polling_steps = int(polling_dt / self.dt)
+    def wait_to_stablize(self, wait_time=0.1, timeout=5.0, tol=0.01, polling_period=100):
         for i in range(int(wait_time/self.dt)): 
             self.step()
 
         t = 0.
         while t < timeout:
-            for _ in range(polling_period): # t += polling_dt
+            for _ in range(polling_period):
                 self.step()
             t += self.dt * polling_period
 
@@ -297,7 +300,7 @@ class World(BulletClient):
     def remove_constraint(self, name):
         self.removeConstraint(self.constr[name])
         del self.constr[name]
-        
+
     def make_fixed_constraint(self):
         raise NotImplementedError("haha")
 
@@ -309,6 +312,7 @@ class AbstractBody(abc.ABC):
     uid: int
     name: str
     mass: float
+    ghost: bool
     
     def set_pose(self, pose: SE3):
         self.world.resetBasePositionAndOrientation(
@@ -371,7 +375,7 @@ class BodyContainer:
     world: World
     bodies: List[AbstractBody]
     relative_poses: List[AbstractBody]
-    #pose: SE3 = field(factory=lambda : SE3.identity())
+    ghost: bool
 
     def __attrs_post_init__(self):
         for body in self.bodies:

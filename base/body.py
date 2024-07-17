@@ -15,7 +15,6 @@ import trimesh
 @define
 class Geometry(AbstractBody):
     shape: Shape
-    ghost: bool
 
     @classmethod
     def make_geometry_body(
@@ -31,8 +30,12 @@ class Geometry(AbstractBody):
             baseCollisionShapeIndex=col_id,
             baseMass=mass)
         body = cls(
-            world=world, uid=uid, 
-            name=name, mass=mass, ghost=shape.ghost, shape=shape)
+            world=world, 
+            uid=uid, 
+            name=name, 
+            mass=mass, 
+            ghost=shape.ghost, 
+            shape=shape)
         world.bodies[name] = body
         return body
 
@@ -62,23 +65,24 @@ class URDF(AbstractBody):
         name,
         world:World,
         path:Path|str,
-        #mass:float=0.5,
         fixed:bool = True,
         scale:float = 1.,
+        ghost: bool = False  
     ):
         if name in world.bodies:
             ic("Body name already exists.")
             return world.bodies[name]
             #world.remove_body(name)
+
         #flags = p.URDF_USE_INERTIA_FROM_FILE if mass is not None else 0
         uid = world.loadURDF(
             fileName=str(path),
             useFixedBase=fixed,
             globalScaling=scale,
-            #flags=flags,
+            #flags=flags, # TODO
         )
         dof = world.getNumJoints(uid)
-        
+
         joint_info = []
         movable_joints = []
         for i in range(dof):
@@ -92,11 +96,27 @@ class URDF(AbstractBody):
         max_torque = [250] * len(movable_joints)
         mass = None
         body = cls(
-            world, uid, name, mass,
-            path, fixed, scale, dof, joint_info, movable_joints,
-            pos_ctrl_gain_p, pos_ctrl_gain_d, max_torque
+            world=world, 
+            uid=uid, 
+            name=name, 
+            mass=mass,
+            ghost=ghost,
+            path=path, 
+            fixed=fixed, 
+            scale=scale, 
+            dof=dof, 
+            joint_info=joint_info, 
+            movable_joints=movable_joints,
+            pos_ctrl_gain_p=pos_ctrl_gain_p, 
+            pos_ctrl_gain_d=pos_ctrl_gain_d, 
+            max_torque=max_torque
         )
-        world.bodies[name] = body
+        if ghost:
+            # TODO -> setCollisionFilterGroupMask
+            # TODO: Do something here if collision behavior should be changed
+            world.ghosts[name] = body
+        else:
+            world.bodies[name] = body
         return body
     
     @classmethod
@@ -219,10 +239,10 @@ class URDF(AbstractBody):
     
 class Frame(URDF):
     @classmethod
-    def create(cls, name, world, 
-        length=0.05, radius=0.005):
+    def create(cls, name:str, world:World, length=0.05, radius=0.005):
         import tempfile
         with tempfile.TemporaryDirectory() as tempdir:
             urdf_path = generate_frame_urdf(tempdir, length, radius)
-            frame = super().create(name, world, urdf_path, fixed=True)
+            # Note: "frame.urdf" has no collision shape
+            frame = super().create(name, world, urdf_path, fixed=True, ghost=True)
         return frame

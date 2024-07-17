@@ -63,7 +63,7 @@ def generate_temp_urdf(mesh: trimesh.Trimesh, tempdir: str, rgba: List[int]=[1, 
     tree.write(urdf_path, encoding="utf-8", xml_declaration=True)
     return urdf_path
 
-def generate_frame_urdf(tempdir,length=0.05, radius=0.005):
+def generate_frame_urdf(tempdir, length=0.05, radius=0.005):
     urdf_name = "frame"
     root = ET.Element("robot", name=urdf_name)
     base_link = ET.SubElement(root, "link", name="base")
