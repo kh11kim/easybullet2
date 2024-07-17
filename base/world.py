@@ -96,6 +96,10 @@ class World(BulletClient):
             cameraPitch=cam_pitch,
             cameraTargetPosition=target_pos)
 
+    @property
+    def bodies_and_ghosts(self):
+        return {**self.bodies, **self.ghosts}
+    
     def get_body(self, name):
         if name in self.bodies:
             return self.bodies[name]

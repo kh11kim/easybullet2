@@ -69,9 +69,9 @@ class URDF(AbstractBody):
         scale:float = 1.,
         ghost: bool = False  
     ):
-        if name in world.bodies:
+        if name in world.bodies_and_ghosts:
             ic("Body name already exists.")
-            return world.bodies[name]
+            return world.bodies_and_ghosts[name]
             #world.remove_body(name)
 
         #flags = p.URDF_USE_INERTIA_FROM_FILE if mass is not None else 0
