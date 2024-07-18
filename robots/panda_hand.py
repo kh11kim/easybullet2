@@ -6,13 +6,11 @@ from ..assets import PANDA_HAND_URDF
 class PandaHand(BodyContainer):
     max_width = 0.08
     z_offset = 0.105
-    # grasping_box: Box = field(init=False)
-    # no_swept_vol: bool = field(init=False)
 
     @property
     def hand_body(self)->URDF: return self.bodies[0]
     @property 
-    def is_swept_vol(self): len(self.bodies) == 2
+    def is_swept_vol(self): return len(self.bodies) == 2
     @property
     def swept_vol(self): 
         assert self.is_swept_vol
@@ -38,7 +36,8 @@ class PandaHand(BodyContainer):
     def is_grasped(self, target_obj:AbstractBody):
         base_col = any(self.world.get_distance_info(self.hand_body, target_obj, -1, -1))
         col = self.hand_body.is_collision_with(target_obj)
-        return not base_col and col
+        sth_in_gripper = self.get_width() > self.max_width * 0.1
+        return not base_col and col and sth_in_gripper
     
     def set_pose(self, pose:SE3):
         base_pose = pose @ self.T_tcp_base
@@ -57,7 +56,7 @@ class PandaHand(BodyContainer):
         self.set_pose(pose)
         self.hand_body.set_joint_angles([width/2,  width/2])
 
-    def grasp(self, duration=0.5, force=50):
+    def grasp(self, duration=1., force=50):
         q_target = np.zeros(2)
         timesteps = int(duration / self.world.dt)
         if self.is_swept_vol:
@@ -75,7 +74,12 @@ class PandaHand(BodyContainer):
             return world.bodies[name]
         
         bodies = []
-        hand = URDF.create(name, world, PANDA_HAND_URDF, fixed=fixed)
+        hand = URDF.create(
+            name=name, 
+            world=world, 
+            path=PANDA_HAND_URDF, 
+            fixed=fixed, 
+            ghost=False)
         bodies.append(hand)
         if grasping_vol:
             box_half_extents = [0.0085, 0.04, 0.0085]
@@ -104,6 +108,7 @@ class PandaHand(BodyContainer):
 class PandaHandUtil:
     def __init__(self, world:World):
         self.world = world
+        self.hand = None
     
     def update_tcp_constraint(self, pose):
         T_body = pose @ self.hand.T_tcp_base @ self.hand.hand_body.T_com
@@ -115,12 +120,13 @@ class PandaHandUtil:
         )
 
     def reset(self, pose=SE3(), width=None):
-        self.hand = PandaHand.create(
-            "hand", 
-            self.world, 
-            fixed=False,
-            grasping_vol=False
-        )
+        if self.hand is None:
+            self.hand = PandaHand.create(
+                "hand", 
+                self.world, 
+                fixed=False,
+                grasping_vol=False
+            )
         if width is None:
             width = self.hand.max_width
         self.hand.reset(pose, width)
@@ -165,18 +171,30 @@ class PandaHandUtil:
         post_grasp_pose = SE3(trans=[0,0,0.2]) @ grasp_pose
 
         is_success = False
-        self.reset(pre_grasp_pose)
-        if self.hand.is_in_collision():
+        try:
+            self.reset(pre_grasp_pose)
+            if self.hand.is_in_collision():
+                raise ValueError
+            self.move_xyz(grasp_pose)
+            if self.hand.is_in_collision() and not allow_contact:
+                raise ValueError
+            
+            self.hand.grasp(duration=1.)
+            self.move_xyz(post_grasp_pose, abort_on_contact=False)
+            is_contact = self.hand.is_in_collision()
+            is_width_not_zero = self.hand.get_width() > 0.1 * self.hand.max_width
+            is_success = is_contact and is_width_not_zero
+        except:
+            is_success = False
+        finally:
+            self.remove()
             return is_success
-        self.move_xyz(grasp_pose)
-        if self.hand.is_in_collision() and not allow_contact:
-            return is_success
-        
-        self.hand.grasp(duration=1.)
-        self.move_xyz(post_grasp_pose, abort_on_contact=False)
-        is_contact = self.hand.is_in_collision()
-        is_width_not_zero = self.hand.get_width() > 0.1 * self.hand.max_width
-        is_success = is_contact and is_width_not_zero
-        self.remove()
-        return is_success
 
+    def check_grasps_in_collision(self, grasp_poses:List[SE3]):
+        self.reset()
+        labels = []
+        for grasp_pose in grasp_poses:
+            self.hand.reset(grasp_pose)
+            labels.append(self.hand.is_in_collision())
+        self.remove()
+        return np.array(labels)
