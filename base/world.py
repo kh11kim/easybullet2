@@ -191,30 +191,12 @@ class World(BulletClient):
                 self.remove_debug_item(name)
             self.debug_items[name] = uid
     
-    def draw_workspace(self, workspace_size, workspace_center_bottom=np.zeros(3)):
-        half_ws_size = workspace_size/2
-        point_from = np.array([
-            [half_ws_size, half_ws_size, 0],
-            [-half_ws_size, half_ws_size, 0],
-            [-half_ws_size, -half_ws_size, 0],
-            [half_ws_size, -half_ws_size, 0],
-            [half_ws_size, half_ws_size, workspace_size],
-            [-half_ws_size, half_ws_size, workspace_size],
-            [-half_ws_size, -half_ws_size, workspace_size],
-            [half_ws_size, -half_ws_size, workspace_size],
-        ])
-        point_to = np.array([
-            [half_ws_size, half_ws_size, workspace_size],
-            [-half_ws_size, half_ws_size, workspace_size],
-            [-half_ws_size, -half_ws_size, workspace_size],
-            [half_ws_size, -half_ws_size, workspace_size],
-            [-half_ws_size, half_ws_size, workspace_size],
-            [-half_ws_size, -half_ws_size, workspace_size],
-            [half_ws_size, -half_ws_size, workspace_size],
-            [half_ws_size, half_ws_size, workspace_size],
-        ])
-        point_from += workspace_center_bottom
-        point_to += workspace_center_bottom
+    def draw_workspace(self, workspace_size, workspace_center=np.zeros(3)):
+        vertices = np.array(list(np.ndindex((2,2,2))))
+        edges = np.array([(0,1),(0,2),(0,4),(1,3),(1,5),(2,3),(2,6),(3,7),(4,5),(4,6),(5,7),(6,7)])
+        point_from = (vertices[edges[:, 0]] - 0.5) * workspace_size + workspace_center
+        point_to = (vertices[edges[:, 1]] - 0.5) * workspace_size + workspace_center
+
         for p1, p2 in zip(point_from, point_to):
             self.add_debug_line(
                 p1, p2, color=[0.5, 0.5, 0.5]
@@ -393,7 +375,8 @@ class BodyContainer:
         rel_poses = [body.get_pose() for body in bodies]
         ref_pose = rel_poses[0]
         rel_poses = [ref_pose.inverse()@pose for pose in rel_poses]
-        return cls(name, world, bodies, rel_poses)
+        ghost = all([body.ghost for body in bodies])
+        return cls(name, world, bodies, rel_poses, ghost)
     
     def get_pose(self):
         return self.bodies[0].get_pose()
