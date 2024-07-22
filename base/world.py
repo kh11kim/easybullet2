@@ -314,6 +314,9 @@ class AbstractBody(abc.ABC):
     
     def is_collision_with(self, other_body:AbstractBody):
         distance_info = self.world.get_distance_info(self, other_body)
+        if hasattr(self, "fixed") and self.fixed:
+            # ignore base collisions of fixed bodies
+            distance_info = [info for info in distance_info if info.linkA != -1]
         return any(distance_info)
     
     def is_in_collision(self):
@@ -330,6 +333,12 @@ class AbstractBody(abc.ABC):
                 if self.is_collision_with(other):
                     return True
         return False
+
+    def disable_collision(self):
+        self.world.setCollisionFilterGroupMask(self.uid, -1, 0, 0)
+        if hasattr(self, "joint_info"):
+            for link_idx in range(len(self.joint_info)):
+                self.world.setCollisionFilterGroupMask(self.uid, link_idx, 0, 0)
 
     def get_dynamics_info(self, link_idx=-1):
         return DynamicsInfo(*self.world.getDynamicsInfo(self.uid, link_idx))
