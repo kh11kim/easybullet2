@@ -106,6 +106,8 @@ class Mesh(Geometry):
             center = mesh.bounding_box.primitive.center
         elif centering_type == "centroid":
             center = mesh.centroid
+        elif centering_type == "bottom":
+            center = np.r_[mesh.centroid[:2], mesh.bounds[0, -1]]
         elif centering_type is None:
             center = np.zeros(3)
         return center

@@ -115,6 +115,8 @@ class URDF(AbstractBody):
             # TODO -> setCollisionFilterGroupMask
             # TODO: Do something here if collision behavior should be changed
             world.ghosts[name] = body
+            body.disable_collision()
+
         else:
             world.bodies[name] = body
         return body
@@ -124,6 +126,19 @@ class URDF(AbstractBody):
         import tempfile
         with tempfile.TemporaryDirectory() as tempdir:
             urdf_path = generate_temp_urdf(mesh, tempdir, rgba)
+            obj = cls.create(
+                name, world, 
+                urdf_path, fixed=fixed, scale=1.)
+        return obj
+    
+    @classmethod
+    def from_mesh_paths(cls, name:str, world:World, visual_mesh_path:Path, col_mesh_path:Path, fixed:bool, rgba=[1,1,1,1]):
+        visual_mesh = trimesh.load(visual_mesh_path)
+        col_mesh = trimesh.load(col_mesh_path)
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tempdir:
+            urdf_path = generate_temp_urdf(visual_mesh, tempdir, rgba, col_mesh=col_mesh)
             obj = cls.create(
                 name, world, 
                 urdf_path, fixed=fixed, scale=1.)
@@ -242,7 +257,7 @@ class Frame(URDF):
     def create(cls, name:str, world:World, length=0.05, radius=0.005):
         import tempfile
         with tempfile.TemporaryDirectory() as tempdir:
-            urdf_path = generate_frame_urdf(tempdir, length, radius)
+            urdf_path = generate_frame_urdf(tempdir, length, radius) #TODO:add mass, inertial information
             # Note: "frame.urdf" has no collision shape
             frame = super().create(name, world, urdf_path, fixed=True, ghost=True)
         return frame

@@ -28,11 +28,14 @@ class HideOutput:
         os.dup2(self._oldstdout_fno, 1)
 
 
-def generate_temp_urdf(mesh: trimesh.Trimesh, tempdir: str, rgba: List[int]=[1, 1, 1, 1]):
-    mesh_path = Path(tempdir) / "mesh.obj"
-    if mesh_path.exists():
-        mesh_path.unlink()
-    mesh.export(mesh_path, "obj")
+def generate_temp_urdf(mesh: trimesh.Trimesh, tempdir: str, rgba: List[int]=[1, 1, 1, 1], col_mesh: trimesh.Trimesh=None):
+    if col_mesh is None: col_mesh = mesh.copy()
+    
+    for vis_col in ["collision", "visual"]:
+        mesh_path = Path(tempdir) / f"mesh_{vis_col}.obj"
+        if mesh_path.exists():
+            mesh_path.unlink()
+        mesh.export(mesh_path, "obj")
     mesh_offset = - mesh.centroid
     
     ndarray_to_str = lambda x: str(x.round(3)).replace("[", "").replace("]", "")
@@ -42,21 +45,25 @@ def generate_temp_urdf(mesh: trimesh.Trimesh, tempdir: str, rgba: List[int]=[1, 
     urdf_name = "temp"
     root = ET.Element("robot", name=urdf_name+".urdf")
     link = ET.SubElement(root, "link", name="mesh")
-    inertial = ET.SubElement(link, "inertial")
+    
     visual = ET.SubElement(link, "visual")
     collision = ET.SubElement(link, "collision")
-    ET.SubElement(inertial, "mass", value="1")
-    ET.SubElement(inertial, "inertia", 
-        ixx="0.1", ixy="0", ixz="0", iyy="0.1", iyz="0", izz="0.1")
-    for element in [visual, collision]:
+    elements = {"visual":visual, "collision":collision}
+    for name in ["visual", "collision"]:
+        element = elements[name]
         origin = ET.SubElement(element, "origin",
             xyz=offset_str, rpy="0 0 0")
         geometry = ET.SubElement(element, "geometry")
         geometry_mesh = ET.SubElement(geometry, "mesh",
-            filename="mesh.obj", scale="1 1 1")
+            filename=f"mesh_{name}.obj", scale="1 1 1")
     material = ET.SubElement(visual, "material", name="color")
     ET.SubElement(material, "color", rgba=color_str)
 
+    inertial = ET.SubElement(link, "inertial")
+    ET.SubElement(inertial, "mass", value="1")
+    ET.SubElement(inertial, "inertia", 
+        ixx="0.1", ixy="0", ixz="0", iyy="0.1", iyz="0", izz="0.1")
+    
     tree = ET.ElementTree(root)
     ET.indent(tree, '  ')
     urdf_path = Path(tempdir) / "temp.urdf"
