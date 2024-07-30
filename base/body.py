@@ -133,12 +133,16 @@ class URDF(AbstractBody):
     
     @classmethod
     def from_mesh_paths(cls, name:str, world:World, visual_mesh_path:Path, col_mesh_path:Path, fixed:bool, rgba=[1,1,1,1]):
-        visual_mesh = trimesh.load(visual_mesh_path)
-        col_mesh = trimesh.load(col_mesh_path)
+        # visual_mesh = trimesh.load(visual_mesh_path)
+        # col_mesh = trimesh.load(col_mesh_path)
 
         import tempfile
         with tempfile.TemporaryDirectory() as tempdir:
-            urdf_path = generate_temp_urdf(visual_mesh, tempdir, rgba, col_mesh=col_mesh)
+            urdf_path = generate_temp_urdf(
+                str(visual_mesh_path), 
+                tempdir, 
+                rgba, 
+                col_mesh=str(col_mesh_path))
             obj = cls.create(
                 name, world, 
                 urdf_path, fixed=fixed, scale=1.)
