@@ -133,8 +133,8 @@ class PandaHandUtil:
 
         if finger_constraint:
             pose_constr_info = ConstraintInfo(
-                self.hand.hand_body.uid, None,
-                None, None,
+                self.hand.hand_body.uid, -1,
+                -1, -1,
                 p.JOINT_FIXED, [0,0,0],
                 (0.,0.,0.), (0.,0.,0.,1.),
                 self.hand.T_base.trans, self.hand.T_base.rot.as_quat()
