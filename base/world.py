@@ -156,10 +156,8 @@ class World(BulletClient):
         return self.shapes[shape]
 
     def remove_body(self, body: str | AbstractBody | BodyContainer):
+        if isinstance(body, str): body = self.bodies_and_ghosts[body]
         def _remove_body(body: str | AbstractBody | BodyContainer, body_dict:Dict[str, AbstractBody]):
-            if isinstance(body, str):
-                body = body_dict[body]
-            
             if isinstance(body, BodyContainer):
                 for b in body.bodies:
                     self.removeBody(b.uid) # delete all contained bodies
@@ -260,35 +258,39 @@ class World(BulletClient):
         if name in self.constr:
             # constraint exists already
             return
-        if constr_info.parent_link is None:
-            constr_info.parent_link = -1
         if constr_info.child_body is None:
             constr_info.child_body = -1
-        if constr_info.child_link is None:
-            constr_info.child_link = -1
+        
         
         self.constr[name] = self.createConstraint(
-            parentBodyUniqueId=constr_info.parent_body,
-            parentLinkIndex=constr_info.parent_link,
-            childBodyUniqueId=constr_info.child_body,
-            childLinkIndex=constr_info.child_link,
-            jointType=constr_info.constr_type,
-            jointAxis=constr_info.joint_axis,
-            parentFramePosition=constr_info.parent_frame_pos,
-            parentFrameOrientation=constr_info.parent_frame_orn,
-            childFramePosition=constr_info.child_frame_pos,
-            childFrameOrientation=constr_info.child_frame_orn,
+            **constr_info.to_dict()
         )
 
     def change_constraint(self, name, **kwargs):
         self.changeConstraint(self.constr[name], **kwargs)
 
+
     def remove_constraint(self, name):
         self.removeConstraint(self.constr[name])
         del self.constr[name]
 
-    def make_fixed_constraint(self):
-        raise NotImplementedError("haha")
+    def make_fixed(self, body:AbstractBody):
+        """ use after set_pose"""
+        self.create_constraint(
+            f"{body.name}_fixed_constr", 
+            ConstraintInfo(
+                parent_body=body.uid,
+                parent_link=-1,
+                child_body=-1,
+                child_link=-1,
+                constr_type=p.JOINT_FIXED,
+                joint_axis=(0,0,0.),
+                parent_frame_pos=(0,0,0),
+                parent_frame_orn=(0,0,0,1),
+                child_frame_pos=body.get_pose().trans,
+                child_frame_orn=body.get_pose().rot.as_quat(),
+            )
+        )
 
 
 
@@ -312,16 +314,16 @@ class AbstractBody(abc.ABC):
         linear, angular = self.world.getBaseVelocity(self.uid)
         return linear, angular
     
-    def is_collision_with(self, other_body:AbstractBody):
+    def is_collision_with(self, other_body:AbstractBody, ignore_fixed_base:bool=True):
         distance_info = self.world.get_distance_info(self, other_body)
-        if hasattr(self, "fixed") and self.fixed:
+        if hasattr(self, "fixed") and self.fixed and ignore_fixed_base:
             # ignore base collisions of fixed bodies
             distance_info = [info for info in distance_info if info.linkA != -1]
         return any(distance_info)
     
-    def is_in_collision(self):
+    def is_in_collision(self, exclude:Tuple[Union[AbstractBody, BodyContainer]]=tuple()):
         for other in self.world.bodies.values():
-            if other is self: continue
+            if other is self or other in exclude: continue
             
             if isinstance(other, BodyContainer):
                 for _other in other.bodies:
@@ -358,7 +360,7 @@ class AbstractBody(abc.ABC):
     
     def change_color(self, rgba, link_idx=-1):
         self.world.changeVisualShape(
-            bodyUniqueId=self.uid, linkIndex=link_idx, rgbaColor=rgba)
+            objectUniqueId=self.uid, linkIndex=link_idx, rgbaColor=rgba)
 
     def __repr__(self):
         return f"{self.__class__.__name__}:{self.name}"

@@ -29,7 +29,7 @@ class PandaHand(BodyContainer):
     def is_grasp_candidate(self, target_obj:AbstractBody):
         assert self.is_swept_vol
         self.world.step(no_dynamics=True)
-        is_col_gripper = self.hand_body.is_collision_with(target_obj)
+        is_col_gripper = self.hand_body.is_collision_with(target_obj, ignore_fixed_base=False)
         is_in_swept_vol = self.swept_vol.is_collision_with(target_obj)
         return is_in_swept_vol and not is_col_gripper
 
@@ -56,7 +56,7 @@ class PandaHand(BodyContainer):
         self.set_pose(pose)
         self.hand_body.set_joint_angles([width/2,  width/2])
 
-    def grasp(self, duration=1., force=50):
+    def grasp(self, duration=2., force=50):
         q_target = np.zeros(2)
         timesteps = int(duration / self.world.dt)
         if self.is_swept_vol:
@@ -119,7 +119,7 @@ class PandaHandUtil:
             maxForce=1000,
         )
 
-    def reset(self, pose=SE3(), width=None):
+    def reset(self, pose=SE3(), width=None, finger_constraint=True):
         if self.hand is None:
             self.hand = PandaHand.create(
                 "hand", 
@@ -131,15 +131,16 @@ class PandaHandUtil:
             width = self.hand.max_width
         self.hand.reset(pose, width)
 
-        pose_constr_info = ConstraintInfo(
-            self.hand.hand_body.uid, None,
-            None, None,
-            p.JOINT_FIXED, [0,0,0],
-            (0.,0.,0.), (0.,0.,0.,1.),
-            self.hand.T_base.trans, self.hand.T_base.rot.as_quat()
-        )
-        self.world.create_constraint("hand_pose_constr", pose_constr_info)
-        self.update_tcp_constraint(pose)
+        if finger_constraint:
+            pose_constr_info = ConstraintInfo(
+                self.hand.hand_body.uid, None,
+                None, None,
+                p.JOINT_FIXED, [0,0,0],
+                (0.,0.,0.), (0.,0.,0.,1.),
+                self.hand.T_base.trans, self.hand.T_base.rot.as_quat()
+            )
+            self.world.create_constraint("hand_pose_constr", pose_constr_info)
+            self.update_tcp_constraint(pose)
 
     def move_xyz(self, target_pose:SE3, xyz_step=0.001, vel=0.1, abort_on_contact=True):
         curr_pose = self.hand.get_pose()
@@ -160,8 +161,9 @@ class PandaHandUtil:
         for _ in range(int(dur_step / self.world.dt)):
             self.world.step()
     
-    def remove(self):
-        self.world.remove_constraint("hand_pose_constr")
+    def remove(self, remove_constraint=True):
+        if remove_constraint:
+            self.world.remove_constraint("hand_pose_constr")
         if self.hand is not None:
             self.world.remove_body(self.hand)
             self.hand = None
@@ -191,10 +193,10 @@ class PandaHandUtil:
             return is_success
 
     def check_grasps_in_collision(self, grasp_poses:List[SE3]):
-        self.reset()
+        self.reset(finger_constraint=False)
         labels = []
         for grasp_pose in grasp_poses:
             self.hand.reset(grasp_pose)
             labels.append(self.hand.is_in_collision())
-        self.remove()
+        self.remove(remove_constraint=False)
         return np.array(labels)

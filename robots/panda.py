@@ -18,6 +18,8 @@ class Panda(URDF):
     max_width:float = 0.08
     ee_idx:int = 10
     finger_force:float = 50.
+    qdot_mag:float = 0.5
+    v_mag:float = 0.5
 
     @property
     def neutral(self):
@@ -40,6 +42,8 @@ class Panda(URDF):
         )
         self.world.create_constraint("panda_finger_constr", finger_constr_info)
         self.world.change_constraint("panda_finger_constr", **{"gearRatio":-1, "erp":0.1, "maxForce":self.finger_force})
+        self.set_dynamics_info(dict(lateralFriction=1.), 8)
+        self.set_dynamics_info(dict(lateralFriction=1.), 9)
 
     def grasp(self, duration=1.):
         q_target = self.get_joint_angles()
@@ -64,12 +68,13 @@ class Panda(URDF):
     def move_to_pose_target(
         self, 
         pose_goal:SE3, 
-        v_mag=0.1, 
+        v_mag=None, 
         is_grasped=False, 
         converge_time=3.,
         gain=1.,
     ):
         ''' task-space control (position)'''
+        if v_mag is None: v_mag = self.v_mag
         pose = self.get_link_pose(self.ee_idx)
         pos_diff = pose_goal.trans - pose.trans
         duration = (np.linalg.norm(pos_diff) / v_mag) + converge_time # to converge
@@ -101,14 +106,43 @@ class Panda(URDF):
                 break
             self.world.step()
 
+    def follow_trajectory(
+        self,
+        traj: np.ndarray,
+        qdot_mag=None, 
+        is_grasped=False, 
+        converge_time=3.
+    ):
+        if qdot_mag is None: qdot_mag = self.qdot_mag
+        ''' joint-space control (position)'''
+        #q_diff = traj[-1] - self.get_joint_angles()
+        duration = np.sum([
+            np.linalg.norm(q1-q2) / qdot_mag for q1, q2 in zip(traj[:-1], traj[1:])
+        ])
+        timesteps = int(duration // self.world.dt)
+        traj = cubic_spline(traj, timesteps)
+        for qd in traj:
+            if len(qd) == 7: qd = np.r_[qd, 0, 0.]
+            if is_grasped: qd[-2:] = 0.
+            else: qd[-2:] = 0.04
+            self.set_ctrl_target_joint_angles(qd)
+            self.world.step()
+        
+        for _ in range(int(converge_time/self.world.dt)):
+            q = self.get_joint_angles()
+            if np.linalg.norm(q - traj[-1], ord=np.inf) < 0.001:
+                break
+            self.world.step()
+
     def move_to_config_target(
         self, 
         q_goal:np.ndarray,
-        qdot_mag=0.4, 
+        qdot_mag=None, 
         is_grasped=False, 
         converge_time=3.
     ):
         ''' joint-space control (position)'''
+        if qdot_mag is None: qdot_mag = self.qdot_mag
         q = self.get_joint_angles()
         q_diff = q_goal - q
         duration = (np.linalg.norm(q_diff) / qdot_mag)# to converge
@@ -117,6 +151,7 @@ class Panda(URDF):
         traj = cubic_spline(
             np.stack([q, q_goal]), timesteps)
         for qd in traj:
+            if len(qd) == 7: qd = np.r_[qd, 0, 0.]
             if is_grasped: qd[-2:] = 0.
             else: qd[-2:] = 0.04
             self.set_ctrl_target_joint_angles(qd)

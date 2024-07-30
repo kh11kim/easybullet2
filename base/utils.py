@@ -5,6 +5,7 @@ import xml.etree.cElementTree as ET
 from pathlib import Path
 from typing import *
 from tempfile import TemporaryDirectory
+import shutil
 
 class HideOutput:
     '''
@@ -28,14 +29,19 @@ class HideOutput:
         os.dup2(self._oldstdout_fno, 1)
 
 
-def generate_temp_urdf(mesh: trimesh.Trimesh, tempdir: str, rgba: List[int]=[1, 1, 1, 1], col_mesh: trimesh.Trimesh=None):
-    if col_mesh is None: col_mesh = mesh.copy()
-    
+def generate_temp_urdf(mesh: Union[trimesh.Trimesh, str], tempdir: str, rgba: List[int]=[1, 1, 1, 1], col_mesh: Union[trimesh.Trimesh, str]=None):    
+    meshes = {"visual":mesh, "collision":col_mesh}
+    mesh_pathes = {}
     for vis_col in ["collision", "visual"]:
         mesh_path = Path(tempdir) / f"mesh_{vis_col}.obj"
-        if mesh_path.exists():
-            mesh_path.unlink()
-        mesh.export(mesh_path, "obj")
+        if isinstance(mesh, str):
+            shutil.copy(Path(meshes["visual"]), mesh_path)
+            mesh = trimesh.load(mesh_path)
+        if isinstance(mesh, trimesh.Trimesh):
+            if mesh_path.exists():
+                mesh_path.unlink()
+            mesh.export(mesh_path, "obj")
+        mesh_pathes[vis_col] = Path(mesh_path)
     mesh_offset = - mesh.centroid
     
     ndarray_to_str = lambda x: str(x.round(3)).replace("[", "").replace("]", "")

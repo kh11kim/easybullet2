@@ -95,10 +95,25 @@ class ConstraintInfo:
     child_link: int
     constr_type: int
     joint_axis: Tuple[float]
-    parent_frame_pos: Tuple[float]
-    parent_frame_orn: Tuple[float]
-    child_frame_pos: Tuple[float]
-    child_frame_orn: Tuple[float]
+    parent_frame_pos: Tuple[float] = None
+    parent_frame_orn: Tuple[float] = None
+    child_frame_pos: Tuple[float] = None
+    child_frame_orn: Tuple[float] = None
+
+    def to_dict(self):
+        res = dict(
+            parentBodyUniqueId=self.parent_body,
+            parentLinkIndex=self.parent_link,
+            childBodyUniqueId=self.child_body,
+            childLinkIndex=self.child_link,
+            jointType=self.constr_type,
+            jointAxis=self.joint_axis,
+            parentFramePosition=self.parent_frame_pos,
+            parentFrameOrientation=self.parent_frame_orn,
+            childFramePosition=self.child_frame_pos,
+            childFrameOrientation=self.child_frame_orn
+        )
+        return {k:v for k, v in res.items() if v is not None}
 
 @define(frozen=True)
 class Shape(abc.ABC):
