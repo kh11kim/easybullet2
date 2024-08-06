@@ -52,6 +52,7 @@ class World(BulletClient):
         solver_iter=150,
         realtime=True,
         realtime_factor=0.5, 
+        background_color=None,
     ):
         if hasattr(self, "_init"): return #preventing multiple initialization
 
@@ -62,12 +63,19 @@ class World(BulletClient):
         self.realtime_factor = realtime_factor
         self.gravity = z_gravity
 
+        options = ""
+        if background_color is not None:
+            background_color = np.array(background_color).astype(np.float64)
+            options = f"--background_color_red={background_color[0]} \
+                        --background_color_green={background_color[1]} \
+                        --background_color_blue={background_color[2]}"
+            
         if gui == True:
             if self.gui_world_exists: return 
             else: self.gui_world_exists = True
         connection_mode = p.GUI if gui else p.DIRECT
         with HideOutput():
-            super().__init__(connection_mode=connection_mode)
+            super().__init__(connection_mode=connection_mode, options=options)
         if self.gui:
             self.pause_button_uid = p.addUserDebugParameter("turn off loop",1,0,1)
         
