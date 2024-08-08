@@ -208,8 +208,13 @@ class World(BulletClient):
                 p1, p2, color=[0.5, 0.5, 0.5]
             )
     
-    def save_state(self): return self.saveState()
-    def restore_state(self, state_uid): return self.restoreState(state_uid)
+    def save_state(self, return_uid=False): 
+        if return_uid: return self.saveState()
+        else: self._state_uid = self.saveState()
+
+    def restore_state(self, state_uid=None): 
+        if state_uid is None: state_uid = self._state_uid
+        return self.restoreState(state_uid)
 
     def get_distance_info(
         self, 
