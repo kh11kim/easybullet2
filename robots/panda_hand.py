@@ -184,7 +184,7 @@ class PandaHandUtil:
             self.hand.grasp(duration=1.)
             self.move_xyz(post_grasp_pose, abort_on_contact=False)
             is_contact = self.hand.is_in_collision()
-            is_width_not_zero = self.hand.get_width() > 0.1 * self.hand.max_width
+            is_width_not_zero = self.hand.get_width() > 0.05 * self.hand.max_width
             is_success = is_contact and is_width_not_zero
         except:
             is_success = False
