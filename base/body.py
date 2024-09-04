@@ -200,16 +200,19 @@ class URDF(AbstractBody):
         rel_pose = SE3(SO3.from_quat(quat), pos)
         return parent_link_pose @ rel_pose
 
-    def get_link_pose(self, link_idx):
+    def get_link_pose(self, link_idx, frame="com"):
         assert len(self.joint_info) > link_idx
         if link_idx == -1:
             return super().get_pose()
-        pos, xyzw = self.world.getLinkState(self.uid, link_idx)[:2]
+        if frame == "com":
+            pos, xyzw = self.world.getLinkState(self.uid, link_idx)[:2]
+        elif frame == "urdf":
+            pos, xyzw = self.world.getLinkState(self.uid, link_idx)[4:6]
         return SE3(SO3.from_quat(xyzw), pos)
     
     def forward_kinematics(self, q:ArrayLike, link_idx:int):
         with self.set_joint_angles_context(q):
-            pose = self.get_link_pose(link_idx)
+            pose = self.get_link_pose(link_idx, frame="urdf")
         return pose
     
     def inverse_kinematics(
@@ -221,17 +224,24 @@ class URDF(AbstractBody):
         with self.set_joint_angles_context(q):
             for _ in range(max_iter):    
                 ik_sol = self.world.calculateInverseKinematics(
-                    self.uid, link_idx, target_pose.trans, target_pose.rot.as_quat())
+                    bodyIndex=self.uid, 
+                    endEffectorLinkIndex=link_idx, 
+                    targetPosition=target_pose.trans, 
+                    targetOrientation=target_pose.rot.as_quat()
+                )
                 self.set_joint_angles(ik_sol) # update initial joint angles to ik solution
                 if not validate: 
                     solved = True
                     break
                 
                 pose_sol = self.forward_kinematics(ik_sol, link_idx)
-                if np.linalg.norm(pose_sol.trans-target_pose.trans) < pos_tol:
+                trans_err = np.linalg.norm(pose_sol.trans-target_pose.trans)
+                if trans_err < pos_tol:
                     solved = True
                     break
-        return np.array(ik_sol) if solved else None
+        if not solved:
+            print(f"ik not solved. pos error = {trans_err}")
+        return np.array(ik_sol) #if solved else None
     
     def set_ctrl_target_joint_angles(self, q):
         assert len(q) == len(self.movable_joints)

@@ -197,6 +197,25 @@ class World(BulletClient):
                 self.remove_debug_item(name)
             self.debug_items[name] = uid
     
+    def add_debug_pcd(self, points, color=[1,0,0], size=5, name=None):
+        """ if name is not None, debug uid is tracked in self.debug_items"""
+        if not isinstance(color, np.ndarray):
+            color = np.array(color)
+        if len(color.shape) == 1:
+            num_points = points.shape[0]
+            color = color[None, ...].repeat(num_points,axis=0)
+        uid = self.addUserDebugPoints(
+            pointPositions=points,
+            pointColorsRGB=color,
+            pointSize=size
+        )
+
+        if name is not None:
+            if name in self.debug_items:
+                self.remove_debug_item(name)
+            self.debug_items[name] = uid
+        return uid
+    
     def draw_workspace(self, workspace_size, workspace_center=np.zeros(3)):
         vertices = np.array(list(np.ndindex((2,2,2))))
         edges = np.array([(0,1),(0,2),(0,4),(1,3),(1,5),(2,3),(2,6),(3,7),(4,5),(4,6),(5,7),(6,7)])
