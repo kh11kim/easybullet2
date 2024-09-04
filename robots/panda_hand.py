@@ -131,16 +131,16 @@ class PandaHandUtil:
             width = self.hand.max_width
         self.hand.reset(pose, width)
 
-        if finger_constraint:
-            pose_constr_info = ConstraintInfo(
-                self.hand.hand_body.uid, -1,
-                -1, -1,
-                p.JOINT_FIXED, [0,0,0],
-                (0.,0.,0.), (0.,0.,0.,1.),
-                self.hand.T_base.trans, self.hand.T_base.rot.as_quat()
-            )
-            self.world.create_constraint("hand_pose_constr", pose_constr_info)
-            self.update_tcp_constraint(pose)
+        # if finger_constraint:
+        pose_constr_info = ConstraintInfo(
+            self.hand.hand_body.uid, -1,
+            -1, -1,
+            p.JOINT_FIXED, [0,0,0],
+            (0.,0.,0.), (0.,0.,0.,1.),
+            self.hand.T_base.trans, self.hand.T_base.rot.as_quat()
+        )
+        self.world.create_constraint("hand_pose_constr", pose_constr_info)
+        self.update_tcp_constraint(pose)
 
     def move_xyz(self, target_pose:SE3, xyz_step=0.001, vel=0.1, abort_on_contact=True):
         curr_pose = self.hand.get_pose()
@@ -164,15 +164,17 @@ class PandaHandUtil:
     def remove(self, remove_constraint=True):
         if remove_constraint:
             self.world.remove_constraint("hand_pose_constr")
+            self.world.remove_constraint("finger_constr")
         if self.hand is not None:
             self.world.remove_body(self.hand)
             self.hand = None
     
-    def execute_grasp(self, grasp_pose:SE3, allow_contact=False):
+    def execute_grasp(self, grasp_pose:SE3, allow_contact=False, return_grasp_obj=True):
         pre_grasp_pose = grasp_pose @ SE3(trans=[0,0,-0.1])
         post_grasp_pose = SE3(trans=[0,0,0.2]) @ grasp_pose
 
         is_success = False
+        grasped_obj = None
         try:
             self.reset(pre_grasp_pose)
             if self.hand.is_in_collision():
@@ -186,11 +188,20 @@ class PandaHandUtil:
             is_contact = self.hand.is_in_collision()
             is_width_not_zero = self.hand.get_width() > 0.05 * self.hand.max_width
             is_success = is_contact and is_width_not_zero
-        except:
+            # if is_success and remove:
+            for body in self.world.bodies.values():
+                if body == self.hand: continue
+                if self.hand.hand_body.is_collision_with(body):
+                    grasped_obj = body
+                        
+        except Exception as e:
+            print(e)
             is_success = False
         finally:
             self.remove()
-            return is_success
+            if return_grasp_obj:
+                return grasped_obj
+            else: return is_success
 
     def check_grasps_in_collision(self, grasp_poses:List[SE3]):
         self.reset(finger_constraint=False)

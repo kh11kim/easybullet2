@@ -284,8 +284,9 @@ class World(BulletClient):
 
 
     def remove_constraint(self, name):
-        self.removeConstraint(self.constr[name])
-        del self.constr[name]
+        if name in self.constr:
+            self.removeConstraint(self.constr[name])
+            del self.constr[name]
 
     def make_fixed(self, body:AbstractBody):
         """ use after set_pose"""
