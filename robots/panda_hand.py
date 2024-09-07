@@ -33,10 +33,10 @@ class PandaHand(BodyContainer):
         is_in_swept_vol = self.swept_vol.is_collision_with(target_obj)
         return is_in_swept_vol and not is_col_gripper
 
-    def is_grasped(self, target_obj:AbstractBody):
+    def is_grasped(self, target_obj:AbstractBody, min_depth=0.01):
         base_col = any(self.world.get_distance_info(self.hand_body, target_obj, -1, -1))
         col = self.hand_body.is_collision_with(target_obj)
-        sth_in_gripper = self.get_width() > self.max_width * 0.1
+        sth_in_gripper = self.get_width() > min_depth
         return not base_col and col and sth_in_gripper
     
     def set_pose(self, pose:SE3):
@@ -56,8 +56,25 @@ class PandaHand(BodyContainer):
         self.set_pose(pose)
         self.hand_body.set_joint_angles([width/2,  width/2])
 
-    def grasp(self, duration=2., force=50):
+    def grasp(self, kinematics=False, duration=2., force=50):
         q_target = np.zeros(2)
+        if kinematics:
+            self.hand_body.set_joint_angles(q_target)
+            return
+        timesteps = int(duration / self.world.dt)
+        if self.is_swept_vol:
+            self.swept_vol.set_pose(SE3(trans=[0,0,-10]))
+        
+        for _ in range(timesteps):
+            self.hand_body.max_torque = [force] * 2
+            self.hand_body.set_ctrl_target_joint_angles(q_target)
+            self.world.step()
+
+    def open(self, kinematics=False, duration=1., force=50):
+        q_target = np.ones(2) * self.max_width / 2
+        if kinematics:
+            self.hand_body.set_joint_angles(q_target)
+            return
         timesteps = int(duration / self.world.dt)
         if self.is_swept_vol:
             self.swept_vol.set_pose(SE3(trans=[0,0,-10]))
@@ -109,6 +126,7 @@ class PandaHandUtil:
     def __init__(self, world:World):
         self.world = world
         self.hand = None
+        self.invisible_pose = SE3(trans=[0,0,2])
     
     def update_tcp_constraint(self, pose):
         T_body = pose @ self.hand.T_tcp_base @ self.hand.hand_body.T_com
@@ -118,6 +136,18 @@ class PandaHandUtil:
             jointChildFrameOrientation=T_body.rot.as_quat(),
             maxForce=1000,
         )
+
+    def invisible(self):
+        assert self.hand is not None
+        if self.hand is None:
+            self.hand.reset(self.invisible_pose)
+    
+    def is_collision(self, pose):
+        assert self.hand is not None
+        hand: PandaHand = self.hand
+        hand.reset(pose)
+        return hand.is_in_collision()
+
 
     def reset(self, pose=SE3(), width=None, finger_constraint=True):
         if self.hand is None:
@@ -169,7 +199,7 @@ class PandaHandUtil:
             self.world.remove_body(self.hand)
             self.hand = None
     
-    def execute_grasp(self, grasp_pose:SE3, allow_contact=False, return_grasp_obj=True):
+    def execute_grasp(self, grasp_pose:SE3, allow_contact=False, return_grasp_obj=True, remove_gripper=True):
         pre_grasp_pose = grasp_pose @ SE3(trans=[0,0,-0.1])
         post_grasp_pose = SE3(trans=[0,0,0.2]) @ grasp_pose
 
@@ -198,7 +228,9 @@ class PandaHandUtil:
             print(e)
             is_success = False
         finally:
-            self.remove()
+            self.hand.open(duration=.5)
+            if remove_gripper:
+                self.remove()
             if return_grasp_obj:
                 return grasped_obj
             else: return is_success
