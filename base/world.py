@@ -309,6 +309,7 @@ class World(BulletClient):
 
     def make_fixed(self, body:AbstractBody):
         """ use after set_pose"""
+        
         self.create_constraint(
             f"{body.name}_fixed_constr", 
             ConstraintInfo(
@@ -319,9 +320,10 @@ class World(BulletClient):
                 constr_type=p.JOINT_FIXED,
                 joint_axis=(0,0,0.),
                 parent_frame_pos=(0,0,0),
+                child_frame_pos=(0,0,0),
                 parent_frame_orn=(0,0,0,1),
-                child_frame_pos=body.get_pose().trans,
-                child_frame_orn=body.get_pose().rot.as_quat(),
+                # parent_frame_pos=body.get_pose().trans,
+                # child_frame_orn=(0,0,0,1),
             )
         )
 

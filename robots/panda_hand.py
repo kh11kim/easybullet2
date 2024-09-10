@@ -228,7 +228,7 @@ class PandaHandUtil:
             print(e)
             is_success = False
         finally:
-            self.hand.open(duration=.5)
+            #self.hand.open(duration=.5)
             if remove_gripper:
                 self.remove()
             if return_grasp_obj:
