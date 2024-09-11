@@ -217,10 +217,15 @@ class URDF(AbstractBody):
     
     def inverse_kinematics(
         self, target_pose:SE3, link_idx:int, 
-        validate=True, max_iter=10, pos_tol=1e-3
+        validate=True, max_iter=10, pos_tol=1e-3,
+        start_with_neutral=True,
+        verbose=False,
     ):
         solved = False
-        q = self.get_joint_angles()
+        if start_with_neutral:
+            q = self.neutral
+        else:
+            q = self.get_joint_angles()
         with self.set_joint_angles_context(q):
             for _ in range(max_iter):    
                 ik_sol = self.world.calculateInverseKinematics(
@@ -239,8 +244,11 @@ class URDF(AbstractBody):
                 if trans_err < pos_tol:
                     solved = True
                     break
-        if not solved:
-            print(f"ik not solved. pos error = {trans_err}")
+        if verbose:
+            if not solved:
+                print(f"ik not solved. pos error = {trans_err}")
+            else:
+                print(f"ik solved. pos error = {trans_err}")
         return np.array(ik_sol) #if solved else None
     
     def set_ctrl_target_joint_angles(self, q):

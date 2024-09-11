@@ -52,6 +52,9 @@ class Panda(URDF):
         for _ in range(timesteps):
             self.set_ctrl_target_joint_angles(q_target)
             self.world.step()
+        if self.get_joint_angles()[-2:].sum() < 0.01:
+            return False
+        return True
     
     def open(self, duration=1.):
         q_target = self.get_joint_angles()
@@ -72,6 +75,7 @@ class Panda(URDF):
         is_grasped=False, 
         converge_time=3.,
         gain=1.,
+        abort_fn=None,
     ):
         ''' task-space control (position)'''
         if v_mag is None: v_mag = self.v_mag
@@ -99,6 +103,10 @@ class Panda(URDF):
             else: q[-2:] = 0.04
             self.set_ctrl_target_joint_angles(q)
             self.world.step()
+            
+            if abort_fn is not None and abort_fn(): 
+                self.set_ctrl_target_joint_angles(self.get_joint_angles())
+                return
         
         for _ in range(int(converge_time/self.world.dt)):
             pose = self.get_link_pose(self.ee_idx)
