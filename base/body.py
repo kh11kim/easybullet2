@@ -247,6 +247,7 @@ class URDF(AbstractBody):
         if verbose:
             if not solved:
                 print(f"ik not solved. pos error = {trans_err}")
+                return None
             else:
                 print(f"ik solved. pos error = {trans_err}")
         return np.array(ik_sol) #if solved else None
