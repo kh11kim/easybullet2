@@ -241,16 +241,18 @@ class URDF(AbstractBody):
                 
                 pose_sol = self.forward_kinematics(ik_sol, link_idx)
                 trans_err = np.linalg.norm(pose_sol.trans-target_pose.trans)
-                if trans_err < pos_tol:
+                is_in_bound = np.all(ik_sol >= self.lb) and np.all(ik_sol <= self.ub)
+                is_near_target = trans_err < pos_tol
+                if is_near_target and is_in_bound:
                     solved = True
                     break
-        if verbose:
-            if not solved:
-                print(f"ik not solved. pos error = {trans_err}")
-                return None
-            else:
-                print(f"ik solved. pos error = {trans_err}")
-        return np.array(ik_sol) #if solved else None
+        
+        if not solved:
+            if verbose: print(f"ik not solved. pos error = {trans_err}")
+            return None
+        else:
+            if verbose: print(f"ik solved. pos error = {trans_err}")
+            return np.array(ik_sol) #if solved else None
     
     def set_ctrl_target_joint_angles(self, q):
         assert len(q) == len(self.movable_joints)
