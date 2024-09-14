@@ -17,7 +17,7 @@ def cubic_spline(qs:np.ndarray, num):
 class Panda(URDF):
     max_width:float = 0.08
     ee_idx:int = 10
-    finger_force:float = 50.
+    finger_force:float = 100.
     qdot_mag:float = 0.5
     v_mag:float = 0.5
 
@@ -42,8 +42,13 @@ class Panda(URDF):
         )
         self.world.create_constraint("panda_finger_constr", finger_constr_info)
         self.world.change_constraint("panda_finger_constr", **{"gearRatio":-1, "erp":0.1, "maxForce":self.finger_force})
-        self.set_dynamics_info(dict(lateralFriction=1.), 8)
-        self.set_dynamics_info(dict(lateralFriction=1.), 9)
+        gripper_dynamics_dict = dict(
+            lateralFriction=0.7,
+            spinningFriction=1.0,
+            rollingFriction=0.0
+        )
+        self.set_dynamics_info(gripper_dynamics_dict, 8)
+        self.set_dynamics_info(gripper_dynamics_dict, 9)
 
     def grasp(self, duration=1.):
         q_target = self.get_joint_angles()
@@ -52,9 +57,7 @@ class Panda(URDF):
         for _ in range(timesteps):
             self.set_ctrl_target_joint_angles(q_target)
             self.world.step()
-        if self.get_joint_angles()[-2:].sum() < 0.01:
-            return False
-        return True
+        return self.get_joint_angles()[-2:].sum()
     
     def open(self, duration=1.):
         q_target = self.get_joint_angles()
@@ -76,6 +79,7 @@ class Panda(URDF):
         converge_time=3.,
         gain=1.,
         abort_fn=None,
+        grasp_width=0.
     ):
         ''' task-space control (position)'''
         if v_mag is None: v_mag = self.v_mag
@@ -99,13 +103,16 @@ class Panda(URDF):
             #     q_delta = q_delta / q_delta_norm * max_qdelta
             q = q + q_delta * gain
 
-            if is_grasped: q[-2:] = 0.
+            if is_grasped: q[-2:] = grasp_width/2
             else: q[-2:] = 0.04
             self.set_ctrl_target_joint_angles(q)
             self.world.step()
             
             if abort_fn is not None and abort_fn(): 
-                self.set_ctrl_target_joint_angles(self.get_joint_angles())
+                qd = self.get_joint_angles()
+                if is_grasped: qd[-2:] = grasp_width/2
+                else: qd[-2:] = 0.04
+                self.set_ctrl_target_joint_angles(qd)
                 return
         
         for _ in range(int(converge_time/self.world.dt)):
@@ -114,12 +121,20 @@ class Panda(URDF):
                 break
             self.world.step()
 
+            if abort_fn is not None and abort_fn(): 
+                qd = self.get_joint_angles()
+                if is_grasped: qd[-2:] = grasp_width/2
+                else: qd[-2:] = 0.04
+                self.set_ctrl_target_joint_angles(qd)
+                return
+
     def follow_trajectory(
         self,
         traj: np.ndarray,
         qdot_mag=None, 
         is_grasped=False, 
-        converge_time=3.
+        converge_time=3.,
+        grasp_width=0.,
     ):
         if qdot_mag is None: qdot_mag = self.qdot_mag
         ''' joint-space control (position)'''
@@ -131,7 +146,7 @@ class Panda(URDF):
         traj = cubic_spline(traj, timesteps)
         for qd in traj:
             if len(qd) == 7: qd = np.r_[qd, 0, 0.]
-            if is_grasped: qd[-2:] = 0.
+            if is_grasped: qd[-2:] = grasp_width/2
             else: qd[-2:] = 0.04
             self.set_ctrl_target_joint_angles(qd)
             self.world.step()
